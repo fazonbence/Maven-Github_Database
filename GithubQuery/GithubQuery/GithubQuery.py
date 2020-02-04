@@ -22,9 +22,10 @@ headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
 
 keys = [
+    "html_url",
      "stargazers_count",
      "watchers_count",
-     "forks"
+     "forks_count"
 ]
 
 queryParams = 'maven2+in:readme'
@@ -43,11 +44,14 @@ with requests.Session() as s:
 response = resp.json()
 
 
-
-      
+#print([{"html_url": item["html_url"], "Forks": item["forks_count"]} for item in response["items"]])
+mydict = [{key:item[key] for key in keys} for item in response["items"]]
+jprint(mydict)
 #jprint(response)
-
-print(getList(response["items"][0]))
+#print(response["items"])
+#print(response["items"][3]["html_url"])
+#print(getList(response["items"][3]))
+#print(getList(response))
 
 #for key in keys:
 #    print('{key}:\t{value}'.format(
