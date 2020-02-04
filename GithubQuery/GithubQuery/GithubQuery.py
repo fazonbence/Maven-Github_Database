@@ -7,20 +7,22 @@ url = "https://api.github.com/search/repositories?q"
 
 
 def getList(dict): 
+    """returns all keys from a dictionary as a list"""
     list = [] 
     for key in dict.keys(): 
         list.append(key) 
           
     return list
 
+
 def jprint(obj):
-    # create a formatted string of the Python JSON object
+    """create a formatted string of the Python JSON object"""
     text = json.dumps(obj, sort_keys=True, indent=4)
     print(text)
 
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
-
+#Which properties are needed
 keys = [
     "html_url",
      "stargazers_count",
@@ -28,6 +30,7 @@ keys = [
      "forks_count"
 ]
 
+#qeuery parameters
 queryParams = 'maven2+in:readme'
 parameters = {
     "page": 2,
@@ -44,18 +47,6 @@ with requests.Session() as s:
 response = resp.json()
 
 
-#print([{"html_url": item["html_url"], "Forks": item["forks_count"]} for item in response["items"]])
-mydict = [{key:item[key] for key in keys} for item in response["items"]]
-jprint(mydict)
-#jprint(response)
-#print(response["items"])
-#print(response["items"][3]["html_url"])
-#print(getList(response["items"][3]))
-#print(getList(response))
-
-#for key in keys:
-#    print('{key}:\t{value}'.format(
-#            key=key,
-#            value=response[key]
-#        )
-#    )
+#filter results
+FilteredResults = [{key:item[key] for key in keys} for item in response["items"]]
+jprint(FilteredResults)
