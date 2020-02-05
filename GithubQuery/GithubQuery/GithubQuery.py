@@ -1,12 +1,20 @@
+"""
+This module collects github project and commit urls whose are also avaible in Maven Central
+"""
+
+__version__ = "0.1"
+__author__ = "Bence Fazekas"
+
 import requests
 from requests.auth import HTTPDigestAuth
 import json
 import itertools
 from time import sleep
 
-MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
-url = "https://api.github.com/search/repositories?q"
 
+MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
+repo_url = "https://api.github.com/search/repositories?q"
+headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
 def getList(dict): 
     """returns all keys from a dictionary as a list"""
@@ -22,7 +30,7 @@ def jprint(obj):
     text = json.dumps(obj, sort_keys=True, indent=4)
     print(text)
 
-headers = { 'Authorization' : 'token ' + MyOauth2Token }
+
 
 #Which properties are needed
 keys = [
@@ -35,7 +43,6 @@ keys = [
 #qeuery parameters
 queryParams = 'https://repo1.maven.org/+in:readme'
 
-
 resultlist = []
 
 #loop until Github max query limit
@@ -47,7 +54,7 @@ for i in range(2):
             "q": queryParams
             }
         s.headers.update(headers)
-        resp = s.get(url, params=parameters)
+        resp = s.get(repo_url, params=parameters)
         #if the sessions is OK
         if resp.status_code == 200:
             resultlist.append([{key:item[key] for key in keys} for item in resp.json()["items"]])
