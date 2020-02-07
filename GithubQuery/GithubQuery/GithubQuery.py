@@ -93,7 +93,7 @@ def GetCommitList(RepoList):
 
             #jprint(resp.json())
             #if the sessions is OK
-            if resp.status_code == 200:
+            if resp.status_code == 200 and len(resp.json())>0:
                 print(getDictKeys(resp.json()[0]))
                 resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json()])
                 sleep(0.05)
