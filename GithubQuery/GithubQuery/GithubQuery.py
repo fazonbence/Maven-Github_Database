@@ -28,7 +28,7 @@ def jprint(obj):
     print(text)
 
 def GetRepoList():
-    #collects the github repository informations via Github API
+    """collects the github repository informations via Github API"""
     
     url_repo = "https://api.github.com/search/repositories?q"
     #Which properties are needed
@@ -56,7 +56,7 @@ def GetRepoList():
             s.headers.update(headers)
             resp = s.get(url_repo, params=parameters)
             #if the sessions is OK
-            if resp.status_code == 200:
+            if resp.status_code == 200 and len(resp.json())>0:
                 resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json()["items"]])
                 sleep(0.05)
             #break if Github deny more result
@@ -67,7 +67,10 @@ def GetRepoList():
     resultlist = list(itertools.chain.from_iterable(resultlist))
     return resultlist
 
-def GetCommitList(RepoList):
+
+def GetCommitList(RepoDict):
+    """collects all the commits of one git repo"""
+
     #Which properties are needed
     keys_repo = [
         "html_url",
@@ -88,21 +91,26 @@ def GetCommitList(RepoList):
                 ,"q": queryParams
                 }
             s.headers.update(headers)
-            print(RepoList[0]["commits_url"][:-6])
-            resp = s.get(RepoList[0]["commits_url"][:-6], params=parameters)
+            #print(RepoDict["commits_url"][:-6])
+            resp = s.get(RepoDict["commits_url"][:-6], params=parameters)
 
             #jprint(resp.json())
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 print(getDictKeys(resp.json()[0]))
-                resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json()])
+                resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json() if "bug" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
                 sleep(0.05)
             #break if Github deny more result
             else:
                 break
 
-    
+    resultlist = list(itertools.chain.from_iterable(resultlist))
     return resultlist
 
-jprint(GetCommitList(GetRepoList()))
+def FilterCommitList(CommitList):
+    """Filter the commits and it's parent, whose message contains bug or fix keyword"""
+    print("")
+
+jprint(GetCommitList(GetRepoList()[0]))
+#jprint(GetRepoList())
 #GetCommitList(GetRepoList())
