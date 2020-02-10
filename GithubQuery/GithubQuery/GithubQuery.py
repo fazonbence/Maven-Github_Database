@@ -13,6 +13,13 @@ from time import sleep
 
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
+CommitProperties = [
+        "html_url",
+        "url",
+         "parents",
+         "sha",
+         "commit"
+    ]
 
 def getDictKeys(dict): 
     """returns all keys from a dictionary as a list"""
@@ -69,16 +76,14 @@ def GetRepoList():
 
 
 def GetCommitList(RepoDict):
-    """collects all the commits of one git repo"""
+    """
+    collects all the commits of one git repo
+    input: A Repo's dictionary
+    output: commits containing 'fix' or 'bug' keywords as a dictianary
+    """
 
     #Which properties are needed
-    keys_repo = [
-        "html_url",
-        "url",
-         "parents",
-         "sha",
-         "commit"
-    ]
+    keys_repo = CommitProperties
     #qeuery parameters
     queryParams = 'bug+in:message'
 
@@ -107,10 +112,25 @@ def GetCommitList(RepoDict):
     resultlist = list(itertools.chain.from_iterable(resultlist))
     return resultlist
 
-def FilterCommitList(CommitList):
-    """Filter the commits and it's parent, whose message contains bug or fix keyword"""
-    print("")
 
-jprint(GetCommitList(GetRepoList()[0]))
+def AddParents(CommitList):
+    """
+        Gets the parents of the commits in a list, 
+        input: List of commit dictionaries
+        output: list of commit dictionaries pairs (Fixed, Parent)
+        NOTE: pairs, because multiple parents are meaning merges
+    """
+    for item in CommitList:
+        with requests.Session() as s:
+                #jprint(item)
+                s.headers.update(headers)
+                resp = s.get(item["parents"][0]["url"])
+                jprint(resp.json())
+
+
+
+
+#jprint(GetCommitList(GetRepoList()[0]))
 #jprint(GetRepoList())
 #GetCommitList(GetRepoList())
+AddParents(GetCommitList(GetRepoList()[0]))
