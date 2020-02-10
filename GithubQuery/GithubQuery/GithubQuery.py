@@ -81,9 +81,6 @@ def GetCommitList(RepoDict):
     input: A Repo's dictionary
     output: commits containing 'fix' or 'bug' keywords as a dictianary
     """
-
-    #Which properties are needed
-    keys_repo = CommitProperties
     #qeuery parameters
     queryParams = 'bug+in:message'
 
@@ -103,7 +100,7 @@ def GetCommitList(RepoDict):
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 print(getDictKeys(resp.json()[0]))
-                resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json() if "bug" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
+                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
                 sleep(0.05)
             #break if Github deny more result
             else:
@@ -117,15 +114,18 @@ def AddParents(CommitList):
     """
         Gets the parents of the commits in a list, 
         input: List of commit dictionaries
-        output: list of commit dictionaries pairs (Fixed, Parent)
+        output: list of tuples containing commit dictionaries  (Fixed, Parent)
         NOTE: pairs, because multiple parents are meaning merges
     """
+    resultlist = []
     for item in CommitList:
-        with requests.Session() as s:
-                #jprint(item)
-                s.headers.update(headers)
-                resp = s.get(item["parents"][0]["url"])
-                jprint(resp.json())
+        #currently merges are out from our scope
+        if len(item["parents"])==1:
+            with requests.Session() as s:
+                    s.headers.update(headers)
+                    resp = s.get(item["parents"][0]["url"])
+                    resultlist.append(((item),({key:item[key] for key in CommitProperties})))
+    return resultlist
 
 
 
@@ -133,4 +133,4 @@ def AddParents(CommitList):
 #jprint(GetCommitList(GetRepoList()[0]))
 #jprint(GetRepoList())
 #GetCommitList(GetRepoList())
-AddParents(GetCommitList(GetRepoList()[0]))
+jprint(AddParents(GetCommitList(GetRepoList()[0])))
