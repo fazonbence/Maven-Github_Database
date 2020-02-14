@@ -14,7 +14,7 @@ from time import sleep
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
 CommitProperties = [
-        "html_url",
+        "html_url",        
         "url",
          "parents",
          "sha",
@@ -127,10 +127,26 @@ def AddParents(CommitList):
                     resultlist.append(((item),({key:item[key] for key in CommitProperties})))
     return resultlist
 
+def GetTree(TreeUrl):
+    """
+    Gets the list of files in the repo's (actual commit) main directory
+    NOTICE: later can be used to get all files recursively, this feuture is currently not needed
+    input: A tree's url
+    output: the content of the needed directory
+    """
+    with requests.Session() as s:        
+        s.headers.update(headers)
+        resp = s.get(TreeUrl)
+        return resp.json()
+    #CommitDict["commit"]["tree"]["url"]
 
 
-
-#jprint(GetCommitList(GetRepoList()[0]))
+#RepoTest
 #jprint(GetRepoList())
-#GetCommitList(GetRepoList())
-jprint(AddParents(GetCommitList(GetRepoList()[0])))
+#Commit Test
+#jprint(GetCommitList(GetRepoList()[-1]))
+#GetCommitList(GetRepoList()[0])
+#ParentTest
+#jprint(AddParents(GetCommitList(GetRepoList()[15])))
+#TreeTest
+#jprint(GetTree(GetCommitList(GetRepoList()[5])[1]))
