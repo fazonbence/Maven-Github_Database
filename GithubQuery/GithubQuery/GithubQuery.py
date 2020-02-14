@@ -140,6 +140,15 @@ def GetTree(TreeUrl):
         return resp.json()
     #CommitDict["commit"]["tree"]["url"]
 
+def FilterCommits(CommitList):
+    """
+    Filters the commits based on the existence of the pom.xml file
+    input: a list of commits
+    output: filetered list of commits
+    """
+    for item in CommitList:
+        Tree = GetTree(item["commit"]["tree"]["url"])
+    print("asd")
 
 #RepoTest
 #jprint(GetRepoList())
