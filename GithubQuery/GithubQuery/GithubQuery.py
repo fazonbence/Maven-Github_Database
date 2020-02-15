@@ -153,14 +153,21 @@ def FilterCommits(CommitList):
         cond = False
         Tree = GetTree(item["commit"]["tree"]["url"])
         #jprint(Tree)
-        for file in Tree["tree"]:
-            if file["path"]=="pom.xml":
-                #if the commit contains a pom.xml file, then we need it
-                resultlist.append(item)
-                cond = True
-        #if the latest version doesn't contains the pom.xml file, 
-        if not cond:
-            break
+
+        print(type(Tree))
+        if type(Tree) is dict and Tree is not {}:
+            try:
+                for file in Tree["tree"]:
+                    if file["path"]=="pom.xml":
+                        #if the commit contains a pom.xml file, then we need it
+                        resultlist.append(item)
+                        cond = True
+                    #if the latest version doesn't contains the pom.xml file, 
+                if not cond:
+                    break
+            except :
+                pass
+            
     return resultlist
 
 
