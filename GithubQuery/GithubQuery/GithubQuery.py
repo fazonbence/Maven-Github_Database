@@ -99,7 +99,7 @@ def GetCommitList(RepoDict):
             #jprint(resp.json())
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
-                print(getDictKeys(resp.json()[0]))
+                #print(getDictKeys(resp.json()[0]))
                 resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
                 sleep(0.05)
             #break if Github deny more result
@@ -146,9 +146,30 @@ def FilterCommits(CommitList):
     input: a list of commits
     output: filetered list of commits
     """
-    for item in CommitList:
+    resultlist = []
+    
+    for item in CommitList:    
+        patience = 5
+        cond = False
         Tree = GetTree(item["commit"]["tree"]["url"])
-    print("asd")
+        #jprint(Tree)
+
+        print(type(Tree))
+        if type(Tree) is dict and Tree is not {}:
+            try:
+                for file in Tree["tree"]:
+                    if file["path"]=="pom.xml":
+                        #if the commit contains a pom.xml file, then we need it
+                        resultlist.append(item)
+                        cond = True
+                    #if the latest version doesn't contains the pom.xml file, 
+                if not cond:
+                    break
+            except :
+                pass
+            
+    return resultlist
+
 
 #RepoTest
 #jprint(GetRepoList())
@@ -158,4 +179,8 @@ def FilterCommits(CommitList):
 #ParentTest
 #jprint(AddParents(GetCommitList(GetRepoList()[15])))
 #TreeTest
-#jprint(GetTree(GetCommitList(GetRepoList()[5])[1]))
+#jprint(GetTree(GetCommitList(GetRepoList()[5])[1])["commit"]["tree"]["url"])
+#FilterTest
+mylist = GetRepoList()
+for item in mylist:
+    jprint(FilterCommits(GetCommitList(item)))
