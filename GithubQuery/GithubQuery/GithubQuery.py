@@ -9,6 +9,7 @@ import requests
 from requests.auth import HTTPDigestAuth
 import json
 import itertools
+import csv
 from time import sleep
 
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
@@ -62,10 +63,11 @@ def GetRepoList():
                 }
             s.headers.update(headers)
             resp = s.get(url_repo, params=parameters)
+            jprint(resp.json())
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json()["items"]])
-                sleep(0.05)
+                sleep(1)
             #break if Github deny more result
             else:
                 break
@@ -85,8 +87,8 @@ def GetCommitList(RepoDict):
     queryParams = 'bug+in:message'
 
     resultlist = []
-    #for i in range(2):
-    for i in itertools.count():
+    for i in range(2):
+    #for i in itertools.count():
         with requests.Session() as s:
             parameters = {
                 "page": i
@@ -100,7 +102,7 @@ def GetCommitList(RepoDict):
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 #print(getDictKeys(resp.json()[0]))
-                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
+                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json()])#if "bug" in item["commit"]["message"]
                 sleep(0.05)
             #break if Github deny more result
             else:
@@ -124,7 +126,8 @@ def AddParents(CommitList):
             with requests.Session() as s:
                     s.headers.update(headers)
                     resp = s.get(item["parents"][0]["url"])
-                    resultlist.append(((item),({key:item[key] for key in CommitProperties})))
+                    resultlist.append(item)
+                    resultlist.append({key:item[key] for key in CommitProperties})
     return resultlist
 
 def GetTree(TreeUrl):
@@ -148,31 +151,29 @@ def FilterCommits(CommitList):
     """
     resultlist = []
     
-    for item in CommitList:    
-        patience = 5
-        cond = False
-        Tree = GetTree(item["commit"]["tree"]["url"])
-        #jprint(Tree)
+    #for item in CommitList:  
+    cond = False
+    Tree = GetTree(CommitList[0]["commit"]["tree"]["url"])
+    #jprint(Tree)
 
-        print(type(Tree))
-        if type(Tree) is dict and Tree is not {}:
-            try:
-                for file in Tree["tree"]:
-                    if file["path"]=="pom.xml":
-                        #if the commit contains a pom.xml file, then we need it
-                        resultlist.append(item)
-                        cond = True
-                    #if the latest version doesn't contains the pom.xml file, 
-                if not cond:
-                    break
-            except :
-                pass
+    print(type(Tree))
+    if type(Tree) is dict and Tree is not {}:
+        try:
+            for file in Tree["tree"]:
+                if file["path"]=="pom.xml":
+                    #if the commit contains a pom.xml file, then we need it
+                    resultlist.append(item)
+                    return CommitList
+                #if the latest version doesn't contains the pom.xml file, 
+          
+        except :
+            pass
             
-    return resultlist
+    return []
 
 
 #RepoTest
-#jprint(GetRepoList())
+#jprint(len(GetRepoList()))
 #Commit Test
 #jprint(GetCommitList(GetRepoList()[-1]))
 #GetCommitList(GetRepoList()[0])
@@ -181,6 +182,34 @@ def FilterCommits(CommitList):
 #TreeTest
 #jprint(GetTree(GetCommitList(GetRepoList()[5])[1])["commit"]["tree"]["url"])
 #FilterTest
-mylist = GetRepoList()
-for item in mylist:
-    jprint(FilterCommits(GetCommitList(item)))
+
+
+if True:
+    resultlist = []
+    mylist = GetRepoList()
+
+    myNum = 1
+    for item in mylist:
+        if myNum>5:
+            break
+        resultlist.append(FilterCommits(GetCommitList(item)))
+        jprint(resultlist[-1])
+
+    resultlist = list(itertools.chain.from_iterable(resultlist))
+    resultlist = AddParents(resultlist)
+
+    #writes the results to a csv, easier to handle
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    jprint(resultlist)
+    with open('people.txt', 'w') as output_file:
+        for item in resultlist:
+            output_file.write(item["html_url"]+"\n")
+       #json.dump(resultlist, output_file)
