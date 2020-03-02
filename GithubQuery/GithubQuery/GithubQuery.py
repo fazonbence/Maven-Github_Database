@@ -1,5 +1,6 @@
 """
 This module collects github project and commit urls whose are also avaible in Maven Central
+prerequisties: git
 """
 
 __version__ = "0.1"
@@ -10,6 +11,7 @@ from requests.auth import HTTPDigestAuth
 import json
 import itertools
 import csv
+import subprocess
 from time import sleep
 
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
@@ -54,8 +56,8 @@ def GetRepoList():
     resultlist = []
 
     #loop until Github max query limit
-    for i in range(2):
-    #for i in itertools.count():
+    #for i in range(2):
+    for i in itertools.count():
         with requests.Session() as s:
             parameters = {
                 "page": i,
@@ -87,8 +89,8 @@ def GetCommitList(RepoDict):
     queryParams = 'bug+in:message'
 
     resultlist = []
-    for i in range(2):
-    #for i in itertools.count():
+    #for i in range(2):
+    for i in itertools.count():
         with requests.Session() as s:
             parameters = {
                 "page": i
@@ -102,13 +104,38 @@ def GetCommitList(RepoDict):
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 #print(getDictKeys(resp.json()[0]))
-                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json()])#if "bug" in item["commit"]["message"]
+                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
                 sleep(0.05)
             #break if Github deny more result
             else:
                 break
 
     resultlist = list(itertools.chain.from_iterable(resultlist))
+    jprint(resultlist)
+    
+    return ChooseCommits(resultlist, 10)
+
+def ChooseCommits(CommitList, CommitNumber):
+    """
+    picks a fixed number of commits from a list based on homogeneous distribution
+    input: list of commits
+    output: smaller list of commits
+    """
+    length = len(CommitList)
+    if CommitList==[]:
+        return []
+    if length<CommitNumber:
+        CommitNumber=length-2
+    else:
+        CommitNumber = CommitNumber -2
+    resultlist=[]
+    resultlist.append(CommitList[0])
+    for i in range(1, CommitNumber):
+        resultlist.append(CommitList[round((1/length)*10*i)])
+    resultlist.append(CommitList[length-1])
+    print("Wise choice indeed!")
+    jprint(resultlist)
+    DebugPrint()
     return resultlist
 
 
@@ -149,6 +176,9 @@ def FilterCommits(CommitList):
     input: a list of commits
     output: filetered list of commits
     """
+    if CommitList == []:
+        print("TOO FEW COMMITS")        
+        return []
     resultlist = []
     
     #for item in CommitList:  
@@ -162,16 +192,70 @@ def FilterCommits(CommitList):
             for file in Tree["tree"]:
                 if file["path"]=="pom.xml":
                     #if the commit contains a pom.xml file, then we need it
-                    resultlist.append(item)
                     return CommitList
-                #if the latest version doesn't contains the pom.xml file, 
+                    #resultlist.append(item)
+                
+            #if the latest version doesn't contains the pom.xml file, 
           
         except :
             pass
             
-    return []
+    return resultlist
+
+def CollectData():
+    resultlist = []
+    mylist = GetRepoList()
+    for item in mylist:
+        resultlist.append(FilterCommits(GetCommitList(item)))        
+        jprint(resultlist)
+        print("MAIn")
+
+    resultlist = list(itertools.chain.from_iterable(resultlist))
+    
+    jprint(resultlist)
+    resultlist = AddParents(resultlist)
+
+    #writes the results to a csv, easier to handle
+    DebugPrint()
+    jprint(resultlist)
+    with open('people.txt', 'w') as output_file:
+        for item in resultlist:
+            html = item["html_url"]
+            sha = item["sha"]
+            output_file.write(html[:-(len(sha)+len("/commit/"))]+"\n")
+            output_file.write(sha+"\n")
 
 
+def DownloadDatabase(inputpath="C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery\\GithubQuery\\output.txt", output_path = "E:\\Repo"):
+    """Downlaod the commits from inputpath to output_path"""
+    subprocess.run(["E:"])    
+    with open(inputpath) as fp:
+        count =1
+        html = fp.readline()
+        sha = fp.readline()
+        while html:
+            subprocess.run(["cd", "output_path"])
+            subprocess.run(["git", "clone", "-n", html, count])
+            subprocess.run(["cd", output_path+"/"+str(count)])
+            subprocess.run(["git", "checkout", sha])
+            subprocess.run(["cd",output_path])
+            count= count+1
+            line = fp.readline()
+            sha = fp.readline()
+            if count>6:
+                break
+
+def DebugPrint():
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    
 #RepoTest
 #jprint(len(GetRepoList()))
 #Commit Test
@@ -181,35 +265,11 @@ def FilterCommits(CommitList):
 #jprint(AddParents(GetCommitList(GetRepoList()[15])))
 #TreeTest
 #jprint(GetTree(GetCommitList(GetRepoList()[5])[1])["commit"]["tree"]["url"])
-#FilterTest
+#CollectTest
+#CollectData()
+#DownloadTest
+DownloadDatabase()
 
 
-if True:
-    resultlist = []
-    mylist = GetRepoList()
-
-    myNum = 1
-    for item in mylist:
-        if myNum>5:
-            break
-        resultlist.append(FilterCommits(GetCommitList(item)))
-        jprint(resultlist[-1])
-
-    resultlist = list(itertools.chain.from_iterable(resultlist))
-    resultlist = AddParents(resultlist)
-
-    #writes the results to a csv, easier to handle
-    print("################")
-    print("################")
-    print("################")
-    print("################")
-    print("################")
-    print("################")
-    print("################")
-    print("################")
-    print("################")
-    jprint(resultlist)
-    with open('people.txt', 'w') as output_file:
-        for item in resultlist:
-            output_file.write(item["html_url"]+"\n")
-       #json.dump(resultlist, output_file)
+    
+      
