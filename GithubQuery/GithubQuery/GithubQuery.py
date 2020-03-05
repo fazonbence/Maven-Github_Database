@@ -6,6 +6,7 @@ prerequisties: git
 __version__ = "0.1"
 __author__ = "Bence Fazekas"
 
+import os
 import requests
 from requests.auth import HTTPDigestAuth
 import json
@@ -226,24 +227,29 @@ def CollectData():
             output_file.write(sha+"\n")
 
 
-def DownloadDatabase(inputpath="C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery\\GithubQuery\\output.txt", output_path = "E:\\Repo"):
+def DownloadDatabase(inputpath="C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery\\GithubQuery\\people.txt", output_path = "E:/Repo"):
     """Downlaod the commits from inputpath to output_path"""
-    subprocess.run(["E:"])    
+      
     with open(inputpath) as fp:
         count =1
         html = fp.readline()
         sha = fp.readline()
+        os.system("E:")  
         while html:
-            subprocess.run(["cd", "output_path"])
-            subprocess.run(["git", "clone", "-n", html, count])
-            subprocess.run(["cd", output_path+"/"+str(count)])
-            subprocess.run(["git", "checkout", sha])
-            subprocess.run(["cd",output_path])
+            #removing the \n from the end
+            html=html[:-1]
+            sha=sha[:-1]
+            os.chdir(output_path)
+
+            os.system(f"cd {output_path}")
+            os.system(f"git clone -n {html} {count}")
+            os.chdir(f"{output_path}/{count}")
+            os.system(f"git checkout {sha}")
+            os.chdir(output_path)
             count= count+1
-            line = fp.readline()
+            html = fp.readline()
             sha = fp.readline()
-            if count>6:
-                break
+            print(count)
 
 def DebugPrint():
     print("################")
