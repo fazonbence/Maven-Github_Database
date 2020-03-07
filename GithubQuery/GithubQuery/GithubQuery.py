@@ -1,14 +1,18 @@
 """
 This module collects github project and commit urls whose are also avaible in Maven Central
+prerequisties: git
 """
 
 __version__ = "0.1"
 __author__ = "Bence Fazekas"
 
+import os
 import requests
 from requests.auth import HTTPDigestAuth
 import json
 import itertools
+import csv
+import subprocess
 from time import sleep
 
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
@@ -53,8 +57,8 @@ def GetRepoList():
     resultlist = []
 
     #loop until Github max query limit
-    for i in range(2):
-    #for i in itertools.count():
+    #for i in range(2):
+    for i in itertools.count():
         with requests.Session() as s:
             parameters = {
                 "page": i,
@@ -62,10 +66,11 @@ def GetRepoList():
                 }
             s.headers.update(headers)
             resp = s.get(url_repo, params=parameters)
+            jprint(resp.json())
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json()["items"]])
-                sleep(0.05)
+                sleep(1)
             #break if Github deny more result
             else:
                 break
@@ -107,6 +112,31 @@ def GetCommitList(RepoDict):
                 break
 
     resultlist = list(itertools.chain.from_iterable(resultlist))
+    jprint(resultlist)
+    
+    return ChooseCommits(resultlist, 10)
+
+def ChooseCommits(CommitList, CommitNumber):
+    """
+    picks a fixed number of commits from a list based on homogeneous distribution
+    input: list of commits
+    output: smaller list of commits
+    """
+    length = len(CommitList)
+    if CommitList==[]:
+        return []
+    if length<CommitNumber:
+        CommitNumber=length-2
+    else:
+        CommitNumber = CommitNumber -2
+    resultlist=[]
+    resultlist.append(CommitList[0])
+    for i in range(1, CommitNumber):
+        resultlist.append(CommitList[round((1/length)*10*i)])
+    resultlist.append(CommitList[length-1])
+    print("Wise choice indeed!")
+    jprint(resultlist)
+    DebugPrint()
     return resultlist
 
 
@@ -124,7 +154,8 @@ def AddParents(CommitList):
             with requests.Session() as s:
                     s.headers.update(headers)
                     resp = s.get(item["parents"][0]["url"])
-                    resultlist.append(((item),({key:item[key] for key in CommitProperties})))
+                    resultlist.append(item)
+                    resultlist.append({key:item[key] for key in CommitProperties})
     return resultlist
 
 def GetTree(TreeUrl):
@@ -146,33 +177,93 @@ def FilterCommits(CommitList):
     input: a list of commits
     output: filetered list of commits
     """
+    if CommitList == []:
+        print("TOO FEW COMMITS")        
+        return []
     resultlist = []
     
-    for item in CommitList:    
-        patience = 5
-        cond = False
-        Tree = GetTree(item["commit"]["tree"]["url"])
-        #jprint(Tree)
+    #for item in CommitList:  
+    cond = False
+    Tree = GetTree(CommitList[0]["commit"]["tree"]["url"])
+    #jprint(Tree)
 
-        print(type(Tree))
-        if type(Tree) is dict and Tree is not {}:
-            try:
-                for file in Tree["tree"]:
-                    if file["path"]=="pom.xml":
-                        #if the commit contains a pom.xml file, then we need it
-                        resultlist.append(item)
-                        cond = True
-                    #if the latest version doesn't contains the pom.xml file, 
-                if not cond:
-                    break
-            except :
-                pass
+    print(type(Tree))
+    if type(Tree) is dict and Tree is not {}:
+        try:
+            for file in Tree["tree"]:
+                if file["path"]=="pom.xml":
+                    #if the commit contains a pom.xml file, then we need it
+                    return CommitList
+                    #resultlist.append(item)
+                
+            #if the latest version doesn't contains the pom.xml file, 
+          
+        except :
+            pass
             
     return resultlist
 
+def CollectData():
+    resultlist = []
+    mylist = GetRepoList()
+    for item in mylist:
+        resultlist.append(FilterCommits(GetCommitList(item)))        
+        jprint(resultlist)
+        print("MAIn")
 
+    resultlist = list(itertools.chain.from_iterable(resultlist))
+    
+    jprint(resultlist)
+    resultlist = AddParents(resultlist)
+
+    #writes the results to a csv, easier to handle
+    DebugPrint()
+    jprint(resultlist)
+    with open('people.txt', 'w') as output_file:
+        for item in resultlist:
+            html = item["html_url"]
+            sha = item["sha"]
+            output_file.write(html[:-(len(sha)+len("/commit/"))]+"\n")
+            output_file.write(sha+"\n")
+
+
+def DownloadDatabase(inputpath="C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery\\GithubQuery\\people.txt", output_path = "E:/Repo"):
+    """Downlaod the commits from inputpath to output_path"""
+      
+    with open(inputpath) as fp:
+        count =1
+        html = fp.readline()
+        sha = fp.readline()
+        os.system("E:")  
+        while html:
+            #removing the \n from the end
+            html=html[:-1]
+            sha=sha[:-1]
+            os.chdir(output_path)
+
+            os.system(f"cd {output_path}")
+            os.system(f"git clone -n {html} {count}")
+            os.chdir(f"{output_path}/{count}")
+            os.system(f"git checkout {sha}")
+            os.chdir(output_path)
+            count= count+1
+            html = fp.readline()
+            sha = fp.readline()
+            print(count)
+
+def DebugPrint():
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    print("################")
+    
 #RepoTest
-#jprint(GetRepoList())
+#jprint(len(GetRepoList()))
 #Commit Test
 #jprint(GetCommitList(GetRepoList()[-1]))
 #GetCommitList(GetRepoList()[0])
@@ -180,7 +271,11 @@ def FilterCommits(CommitList):
 #jprint(AddParents(GetCommitList(GetRepoList()[15])))
 #TreeTest
 #jprint(GetTree(GetCommitList(GetRepoList()[5])[1])["commit"]["tree"]["url"])
-#FilterTest
-mylist = GetRepoList()
-for item in mylist:
-    jprint(FilterCommits(GetCommitList(item)))
+#CollectTest
+#CollectData()
+#DownloadTest
+DownloadDatabase()
+
+
+    
+      
