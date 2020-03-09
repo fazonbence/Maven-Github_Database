@@ -15,6 +15,7 @@ import csv
 import subprocess
 from time import sleep
 
+#FLAG
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
 CommitProperties = [
@@ -105,14 +106,14 @@ def GetCommitList(RepoDict):
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 #print(getDictKeys(resp.json()[0]))
-                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
+                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
                 sleep(0.05)
             #break if Github deny more result
             else:
                 break
 
     resultlist = list(itertools.chain.from_iterable(resultlist))
-    jprint(resultlist)
+    #jprint(resultlist)
     
     return ChooseCommits(resultlist, 10)
 
@@ -122,20 +123,18 @@ def ChooseCommits(CommitList, CommitNumber):
     input: list of commits
     output: smaller list of commits
     """
-    length = len(CommitList)
-    if CommitList==[]:
-        return []
+    length = len(CommitList)  
     if length<CommitNumber:
-        CommitNumber=length-2
-    else:
-        CommitNumber = CommitNumber -2
+        return CommitList
     resultlist=[]
     resultlist.append(CommitList[0])
-    for i in range(1, CommitNumber):
-        resultlist.append(CommitList[round((1/length)*10*i)])
+    DebugPrint()
+    for i in range(CommitNumber):
+        print(round(length*0.1*i))
+        resultlist.append(CommitList[round(length*0.1*i)])
     resultlist.append(CommitList[length-1])
     print("Wise choice indeed!")
-    jprint(resultlist)
+    #jprint(resultlist)
     DebugPrint()
     return resultlist
 
@@ -152,10 +151,14 @@ def AddParents(CommitList):
         #currently merges are out from our scope
         if len(item["parents"])==1:
             with requests.Session() as s:
+                try:
                     s.headers.update(headers)
                     resp = s.get(item["parents"][0]["url"])
                     resultlist.append(item)
-                    resultlist.append({key:item[key] for key in CommitProperties})
+                    resultlist.append({key:resp[key] for key in CommitProperties})
+                except :
+                    pass
+                    
     return resultlist
 
 def GetTree(TreeUrl):
@@ -187,7 +190,7 @@ def FilterCommits(CommitList):
     Tree = GetTree(CommitList[0]["commit"]["tree"]["url"])
     #jprint(Tree)
 
-    print(type(Tree))
+    #print(type(Tree))
     if type(Tree) is dict and Tree is not {}:
         try:
             for file in Tree["tree"]:
@@ -208,12 +211,12 @@ def CollectData():
     mylist = GetRepoList()
     for item in mylist:
         resultlist.append(FilterCommits(GetCommitList(item)))        
-        jprint(resultlist)
+        #jprint(resultlist)
         print("MAIn")
 
     resultlist = list(itertools.chain.from_iterable(resultlist))
     
-    jprint(resultlist)
+    #jprint(resultlist)
     resultlist = AddParents(resultlist)
 
     #writes the results to a csv, easier to handle
@@ -250,6 +253,8 @@ def DownloadDatabase(inputpath="C:\\Users\\fazon\\source\\repos\\Maven-Github_Da
             html = fp.readline()
             sha = fp.readline()
             print(count)
+            if count > 10:
+                break
 
 def DebugPrint():
     print("################")
@@ -271,10 +276,11 @@ def DebugPrint():
 #jprint(AddParents(GetCommitList(GetRepoList()[15])))
 #TreeTest
 #jprint(GetTree(GetCommitList(GetRepoList()[5])[1])["commit"]["tree"]["url"])
+
 #CollectTest
-#CollectData()
+CollectData()
 #DownloadTest
-DownloadDatabase()
+#DownloadDatabase()
 
 
     
