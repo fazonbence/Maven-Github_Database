@@ -58,8 +58,8 @@ def GetRepoList():
     resultlist = []
 
     #loop until Github max query limit
-    #for i in range(2):
-    for i in itertools.count():
+    #for i in range(1, 3):
+    for i in itertools.count(1):
         with requests.Session() as s:
             parameters = {
                 "page": i,
@@ -90,9 +90,9 @@ def GetCommitList(RepoDict):
     #qeuery parameters
     queryParams = 'bug+in:message'
 
-    resultlist = []
-    #for i in range(2):
-    for i in itertools.count():
+    resultlist = [[]]
+    #for i in range(1,3):
+    for i in itertools.count(1):
         with requests.Session() as s:
             parameters = {
                 "page": i
@@ -106,7 +106,9 @@ def GetCommitList(RepoDict):
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 #print(getDictKeys(resp.json()[0]))
-                resultlist.append([{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]])#if "bug" in item["commit"]["message"]
+                ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]#if "bug" in item["commit"]["message"]
+                if ListItem != resultlist[-1]:
+                    resultlist.append(ListItem)
                 sleep(0.05)
             #break if Github deny more result
             else:
@@ -116,6 +118,7 @@ def GetCommitList(RepoDict):
     #jprint(resultlist)
     
     return ChooseCommits(resultlist, 10)
+    return resultlist
 
 def ChooseCommits(CommitList, CommitNumber):
     """
@@ -127,12 +130,12 @@ def ChooseCommits(CommitList, CommitNumber):
     if length<CommitNumber:
         return CommitList
     resultlist=[]
-    resultlist.append(CommitList[0])
+    #resultlist.append(CommitList[0])
     DebugPrint()
     for i in range(CommitNumber):
         print(round(length*0.1*i))
         resultlist.append(CommitList[round(length*0.1*i)])
-    resultlist.append(CommitList[length-1])
+    #resultlist.append(CommitList[length-1])
     print("Wise choice indeed!")
     #jprint(resultlist)
     DebugPrint()
@@ -148,17 +151,16 @@ def AddParents(CommitList):
     """
     resultlist = []
     for item in CommitList:
-        #currently merges are out from our scope
+#currently merges are out from our scope
         if len(item["parents"])==1:
             with requests.Session() as s:
-                try:
-                    s.headers.update(headers)
-                    resp = s.get(item["parents"][0]["url"])
-                    resultlist.append(item)
-                    resultlist.append({key:resp[key] for key in CommitProperties})
-                except :
-                    pass
-                    
+                s.headers.update(headers)
+                resp = s.get(item["parents"][0]["url"])
+                resultlist.append(item)
+                jprint(resp.json())
+                NewItem = {key:resp.json()[key] for key in CommitProperties}
+                if NewItem not in CommitList:
+                    resultlist.append(NewItem)
     return resultlist
 
 def GetTree(TreeUrl):
@@ -210,7 +212,8 @@ def CollectData():
     resultlist = []
     mylist = GetRepoList()
     for item in mylist:
-        resultlist.append(FilterCommits(GetCommitList(item)))        
+        #resultlist.append(FilterCommits(GetCommitList(item)))   
+        resultlist.append(GetCommitList(item))   
         #jprint(resultlist)
         print("MAIn")
 
