@@ -155,12 +155,17 @@ def AddParents(CommitList):
         if len(item["parents"])==1:
             with requests.Session() as s:
                 s.headers.update(headers)
-                resp = s.get(item["parents"][0]["url"])
-                resultlist.append(item)
-                jprint(resp.json())
-                NewItem = {key:resp.json()[key] for key in CommitProperties}
-                if NewItem not in CommitList:
-                    resultlist.append(NewItem)
+                try:
+                    resp = s.get(item["parents"][0]["url"])
+                    resultlist.append(item)
+                    #jprint(resp.json())
+                    NewItem = {key:resp.json()[key] for key in CommitProperties}
+                    if NewItem not in CommitList:
+                        resultlist.append(NewItem)
+                    print("Successful")
+                except :
+                    print("Error")
+                
     return resultlist
 
 def GetTree(TreeUrl):
