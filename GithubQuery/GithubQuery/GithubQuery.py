@@ -109,7 +109,7 @@ def GetCommitList(RepoDict):
                 ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]#if "bug" in item["commit"]["message"]
                 if ListItem != resultlist[-1]:
                     resultlist.append(ListItem)
-                sleep(0.05)
+                sleep(1)
             #break if Github deny more result
             else:
                 break
@@ -157,12 +157,14 @@ def AddParents(CommitList):
                 s.headers.update(headers)
                 try:
                     resp = s.get(item["parents"][0]["url"])
-                    resultlist.append(item)
-                    #jprint(resp.json())
-                    NewItem = {key:resp.json()[key] for key in CommitProperties}
-                    if NewItem not in CommitList:
-                        resultlist.append(NewItem)
-                    print("Successful")
+                    if resp.status_code == 200 and len(resp.json())>0:                        
+                        resultlist.append(item)
+                        #jprint(resp.json())
+                        NewItem = {key:resp.json()[key] for key in CommitProperties}
+                        if NewItem not in CommitList:
+                            resultlist.append(NewItem)
+                        print("Successful")
+                        sleep(1)
                 except :
                     print("Error")
                 
