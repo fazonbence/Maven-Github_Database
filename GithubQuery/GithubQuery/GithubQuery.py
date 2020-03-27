@@ -14,6 +14,7 @@ import itertools
 import csv
 import subprocess
 from time import sleep
+import PySimpleGUI as sg
 
 #FLAG
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
@@ -219,8 +220,8 @@ def CollectData():
     resultlist = []
     mylist = GetRepoList()
     for item in mylist:
-        #resultlist.append(FilterCommits(GetCommitList(item)))   
-        resultlist.append(GetCommitList(item))   
+        resultlist.append(FilterCommits(GetCommitList(item)))   
+        #resultlist.append(GetCommitList(item))   
         #jprint(resultlist)
         print("MAIn")
 
@@ -287,11 +288,18 @@ def DebugPrint():
 #TreeTest
 #jprint(GetTree(GetCommitList(GetRepoList()[5])[1])["commit"]["tree"]["url"])
 
-#CollectTest
-CollectData()
-#DownloadTest
+
+#Github Query
+#CollectData()
+
+#Download the database
 #DownloadDatabase()
 
+#UI
+
+sg.theme('Dark Blue 8')
+
+for i in range(1000):   # this is your "work loop" that you want to monitor
+    sg.OneLineProgressMeter('One Line Meter Example', i + 1, 1000, 'key')
 
     
-      
