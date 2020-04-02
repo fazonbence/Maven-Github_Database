@@ -106,7 +106,7 @@ def GetCommitList(RepoDict):
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 #print(getDictKeys(resp.json()[0]))
-                ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]#if "bug" in item["commit"]["message"]
+                ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() ]#iif "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]
                 if ListItem != resultlist[-1]:
                     resultlist.append(ListItem)
                 sleep(1)
@@ -206,7 +206,7 @@ def FilterCommits(CommitList):
                 if file["path"]=="pom.xml":
                     #if the commit contains a pom.xml file, then we need it
                     return CommitList
-                    #resultlist.append(item)
+                    #○resultlist.append(item)
                 
             #if the latest version doesn't contains the pom.xml file, 
           
@@ -219,8 +219,8 @@ def CollectData():
     resultlist = []
     mylist = GetRepoList()
     for item in mylist:
-        #resultlist.append(FilterCommits(GetCommitList(item)))   
-        resultlist.append(GetCommitList(item))   
+        resultlist.append(FilterCommits(GetCommitList(item)))   
+        #resultlist.append(GetCommitList(item))   
         #jprint(resultlist)
         print("MAIn")
 
