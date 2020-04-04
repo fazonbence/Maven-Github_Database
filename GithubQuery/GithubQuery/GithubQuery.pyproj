@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>1e2ca154-299a-452b-bb92-95c3584fa69a</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>WithUI.pyw</StartupFile>
+    <StartupFile>GithubQuery.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

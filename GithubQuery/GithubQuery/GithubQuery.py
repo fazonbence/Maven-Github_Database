@@ -16,6 +16,9 @@ import subprocess
 from time import sleep
 import PySimpleGUI as sg
 import ctypes
+from queue import Queue 
+from threading import Thread
+import concurrent.futures
 
 #FLAG
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
@@ -41,7 +44,7 @@ def jprint(obj):
     text = json.dumps(obj, sort_keys=True, indent=4)
     print(text)
 
-def GetRepoList():
+def GetRepoList(in_q = None):
     """collects the github repository informations via Github API"""
     
     url_repo = "https://api.github.com/search/repositories?q"
@@ -60,8 +63,8 @@ def GetRepoList():
     resultlist = []
 
     #loop until Github max query limit
-    #for i in range(1, 3):
-    for i in itertools.count(1):
+    for i in range(1, 3):
+    #for i in itertools.count(1):
         with requests.Session() as s:
             parameters = {
                 "page": i,
@@ -69,10 +72,12 @@ def GetRepoList():
                 }
             s.headers.update(headers)
             resp = s.get(url_repo, params=parameters)
-            jprint(resp.json())
+            #jprint(resp.json())
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
                 resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json()["items"]])
+                if in_q is not None:
+                    in_q.put(i)
                 sleep(1)
             #break if Github deny more result
             else:
@@ -333,7 +338,7 @@ col_params =  [[sg.Text('Query parameters:')],
 layout = [[sg.Column(col_btn),sg.Column(col_chbox), sg.Column(col_params)],
           [sg.Button('Choose Location',key='btn_location', size = (20, 3)), sg.Text('C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery'), sg.Button('Start', key='btn_Start', size = (20, 3), pad=((300, 10), 30), font=(15))],
           [sg.Text('A custom progress meter'), sg.Text('', key="lbl_Progbar1")],
-          [sg.ProgressBar(1000, orientation='h', size=(96, 20), key='Progbar1')],
+          [sg.ProgressBar(10, orientation='h', size=(96, 20), key='Progbar1')],
           [sg.Text('A custom progress meter'), sg.Text('', key="lbl_Progbar2")],
           [sg.ProgressBar(3000, orientation='h', size=(96, 20), key='Progbar2')],
           [sg.Cancel()]]
@@ -343,6 +348,7 @@ window = sg.Window('Custom Progress Meter', layout)
 # loop that would normally do something useful
 i = 0
 j = 0
+q = Queue() 
 while True:
     i = i+1
     
@@ -352,8 +358,16 @@ while True:
         break
     elif event == 'btn_getrepos':
         print("btn_getrepos")
-        GetRepoList()
-        print(values)
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(GetRepoList, q)
+            i = q.get()
+            while not future.done():
+                window['Progbar1'].update_bar(i + 1)
+                #print(i)
+                if not q.empty():
+                    i = q.get()
+            jprint(future.result())
     elif event == 'btn_getcommits':
         print("btn_getcommits")
     elif event == 'btn_viewprojects':
