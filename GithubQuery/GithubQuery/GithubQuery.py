@@ -286,25 +286,30 @@ def FilterCommits(CommitList, values=None):
         return []
     resultlist = []
     
-    #for item in CommitList:  
-    cond = False
-    Tree = GetTree(CommitList[0]["commit"]["tree"]["url"])
-    #jprint(Tree)
-
-    #print(type(Tree))
-    if type(Tree) is dict and Tree is not {}:
+    for item in CommitList:  
+        cond = False
         try:
-            for file in Tree["tree"]:
-                if file["path"]=="pom.xml":
-                    #if the commit contains a pom.xml file, then we need it
-                    return CommitList
-                    #resultlist.append(item)
+            Tree = GetTree(item["commit"]["tree"]["url"])
+            #jprint(Tree)
+
+            #print(type(Tree))
+            if type(Tree) is dict and Tree is not {}:
+                try:
+                    for file in Tree["tree"]:
+                        if file["path"]=="pom.xml":
+                            #if the commit contains a pom.xml file, then we need it
+                            #return CommitList                            
+                            resultlist.append(item)                            
+                            cond = True
+                            break
                 
-            #if the latest version doesn't contains the pom.xml file, 
+                    #if the latest version doesn't contains the pom.xml file, 
           
+                except :
+                    print("other error")
+            print("lucky find!" if cond else "Missing have pom.xml")
         except :
-            pass
-            
+            print("Wrong Tree")
     return resultlist
 
 def CollectData():
