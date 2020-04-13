@@ -57,8 +57,7 @@ DisplayableRepoProperties = [
         "html_url",
         "url"
     ]
-DisplayableCommitProperties = [
-        "sha",
+DisplayableCommitProperties = [        
         "html_url",
         "url"
     ]
@@ -205,32 +204,58 @@ def AddParents(CommitList,in_q = None):
     """
         Gets the parents of the commits in a list, 
         input: List of commit dictionaries
-        output: list of tuples containing commit dictionaries  (Fixed, Parent)
-        NOTE: pairs, because multiple parents are meaning merges
+        output: List of commit dictionaries with parents
+        NOTE: multiple parents are possible due to merges
     """
     resultlist = []
     count = 0
     for item in CommitList:
-#currently merges are out from our scope
+        resultlist.append(item)
         if len(item["parents"])==1:
             with requests.Session() as s:
                 s.headers.update(headers)
                 try:
                     resp = s.get(item["parents"][0]["url"])
                     if resp.status_code == 200 and len(resp.json())>0:                        
-                        resultlist.append(item)
+                        
                         #jprint(resp.json())
                         NewItem = {key:resp.json()[key] for key in CommitProperties}
                         if NewItem not in CommitList:
+                            print("Successful")
                             resultlist.append(NewItem)
-                        print("Successful")
+                        else:
+                            print("Already in the list")
+                            print(item["html_url"])
+                        
                         sleep(1)
                         if in_q is not None:
                             in_q.put((count, len(CommitList)))
                     
                             
                 except :
-                    print("Error")
+                    print("Error")        
+        else:
+            print("Complicated")
+            with requests.Session() as s:
+                s.headers.update(headers)
+                for parent in item["parents"]:
+                    try:                    
+                        resp = s.get(parent["url"])
+                        if resp.status_code == 200 and len(resp.json())>0:          
+                            #jprint(resp.json())
+                            NewItem = {key:resp.json()[key] for key in CommitProperties}
+                            if NewItem not in CommitList:
+                                print("Successful")
+                                resultlist.append(NewItem)
+                            else:
+                                print("Already in the list")
+                                print(item["html_url"])
+                        
+                            sleep(1)
+                            if in_q is not None:
+                                in_q.put((count, len(CommitList)))      
+                    except :
+                      print("Error")        
         count = count+1
     if in_q is not None:
         in_q.put(( len(CommitList), len(CommitList)))
@@ -393,58 +418,52 @@ def Gui_GetRepositories(window, values, phase):
 
 def Gui_GetCommits(window, values, RepoList):
     CommitList=[]
-    if RepoList != None:
-        print(RepoList)
-    else:
-        phase=(1, 3)
-        RepoList=Gui_GetRepositories(window, values, phase)
-
+    
     count = 1
-    if RepoList != None:    
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            for item in RepoList:     
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        for item in RepoList:     
+            window.Finalize()
+            window['lbl_Progbar2'].update(("Phase: "+str(2)+"/"+str(3)+" Getting Commits"))
+            window['Progbar2'].update_bar(2, 3)
+            window['lbl_Progbar1'].update("Starting the query, please stand by")
+            future = executor.submit(GetCommitList,item, values)
+            while not future.done():
                 window.Finalize()
-                window['lbl_Progbar2'].update(("Phase: "+str(2)+"/"+str(3)+" Getting Commits"))
-                window['Progbar2'].update_bar(2, 3)
-                window['lbl_Progbar1'].update("Starting the query, please stand by")
-                future = executor.submit(GetCommitList,item, values)
-                while not future.done():
-                    window.Finalize()
-                    window['lbl_Progbar1'].update(("Getting Commits, progress: "+str(count)+"/"+str(len(RepoList))))
-                    window['Progbar1'].update_bar(count, len(RepoList))
-                result=future.result()
-                if type(result) is not list:
-                    window.Finalize()
-                    window['lbl_Progbar1'].update(result)
-                    break
-                future2 = executor.submit(FilterCommits,result, values)
-                while not future2.done():
-                    window.Finalize()
-                    window['lbl_Progbar1'].update(("Filtering Commits, progress: "+str(count)+"/"+str(len(RepoList))))
-                    window['Progbar1'].update_bar(count+1,  len(RepoList))      
-                result = future2.result()
-                count=count+1
-                CommitList.append(result)
-            CommitList = list(itertools.chain.from_iterable(CommitList))
-            if values["ChBox_AddParents"] or values["ChBox_DeafultParams"]:
+                window['lbl_Progbar1'].update(("Getting Commits, progress: "+str(count)+"/"+str(len(RepoList))))
+                window['Progbar1'].update_bar(count, len(RepoList))
+            result=future.result()
+            if type(result) is not list:
+                window.Finalize()
+                window['lbl_Progbar1'].update(result)
+                break
+            future2 = executor.submit(FilterCommits,result, values)
+            while not future2.done():
+                window.Finalize()
+                window['lbl_Progbar1'].update(("Filtering Commits, progress: "+str(count)+"/"+str(len(RepoList))))
+                window['Progbar1'].update_bar(count+1,  len(RepoList))      
+            result = future2.result()
+            count=count+1
+            CommitList.append(result)
+        CommitList = list(itertools.chain.from_iterable(CommitList))
+        if values["ChBox_AddParents"] or values["ChBox_DeafultParams"]:
                 
-                q = Queue()
-                progress = (0, 0)
+            q = Queue()
+            progress = (0, 0)
+            window.Finalize()
+            window['lbl_Progbar2'].update(("Phase: "+str(3)+"/"+str(3)+" Adding Parents"))
+            window['Progbar2'].update_bar(3, 3)
+            future3 = executor.submit(AddParents,CommitList, q)
+            while not future3.done():
+                if not q.empty():
+                    progress = q.get()
                 window.Finalize()
-                window['lbl_Progbar2'].update(("Phase: "+str(3)+"/"+str(3)+" Adding Parents"))
-                window['Progbar2'].update_bar(3, 3)
-                future3 = executor.submit(AddParents,CommitList, q)
-                while not future3.done():
-                    if not q.empty():
-                        progress = q.get()
-                    window.Finalize()
-                    window['lbl_Progbar1'].update(("Adding Parents, progress: "+str(progress[0])+"/"+str(progress[1])))
-                    window['Progbar1'].update_bar(progress[0],  progress[1])
+                window['lbl_Progbar1'].update(("Adding Parents, progress: "+str(progress[0])+"/"+str(progress[1])))
+                window['Progbar1'].update_bar(progress[0],  progress[1])
                     
-                CommitList = future3.result()
-                window.Finalize()
-                #window['lbl_Progbar1'].update(("Adding Parents, progress: "+str(progress[1])+"/"+str(progress[1])))
-                #window['Progbar1'].update_bar(progress[1],  progress[1])
+            CommitList = future3.result()
+            window.Finalize()
+            #window['lbl_Progbar1'].update(("Adding Parents, progress: "+str(progress[1])+"/"+str(progress[1])))
+            #window['Progbar1'].update_bar(progress[1],  progress[1])
 
     return CommitList
     
@@ -508,16 +527,25 @@ def Gui_MainWindow():
                 RepoList=Gui_GetRepositories(window, values, phase)
 
             elif event == 'btn_getcommits':
-                CommitList=Gui_GetCommits(window, values, RepoList)     
+                if RepoList != None:
+                    print(RepoList)
+                else:
+                    phase=(1, 3)
+                    RepoList=Gui_GetRepositories(window, values, phase)
+
+                if RepoList != None:    
+                    CommitList=Gui_GetCommits(window, values, RepoList)     
                 print("btn_getcommits")
             elif event == 'btn_viewprojects':
                 print("btn_viewprojects")
                 if RepoList is not None:
-                    jprint(RepoList)
+                    Gui_CreatePreview(RepoList, DisplayableRepoProperties, False)
             elif event == 'btn_viewcommits':
                 print("btn_viewcommits")
                 if CommitList is not None:
-                   jprint(CommitList)
+                    Gui_CreatePreview(CommitList, DisplayableCommitProperties, True)
+                    #jprint(CommitList)
+                    
             elif event == 'btn_Download':
                 print("btn_Download")
             elif event == 'btn_location':
@@ -643,22 +671,11 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
 #DownloadDatabase()
 
 #UI
-#MainWindow()
+Gui_MainWindow()
 #hide  the console
 #ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
 #ProjectPreview
 #RepoList=GetRepoList()
-resultlist = []
-mylist = GetRepoList()
-for item in mylist:
-    resultlist.append(FilterCommits(GetCommitList(item)))   
-    print("MAIn")
-
-resultlist = list(itertools.chain.from_iterable(resultlist))
 
 
-
-print(getDictKeys(resultlist[0]))
-print(getDictKeys(resultlist[0]["commit"]))
-Gui_CreatePreview(resultlist, DisplayableCommitProperties, True)
