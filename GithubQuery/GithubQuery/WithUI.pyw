@@ -46,7 +46,7 @@ def GetRepoList():
     
     url_repo = "https://api.github.com/search/repositories?q"
     #Which properties are needed
-    keys_repo = [
+    RepoProperties = [
         "html_url",
         "url",
          "stargazers_count",
@@ -72,7 +72,7 @@ def GetRepoList():
             jprint(resp.json())
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
-                resultlist.append([{key:item[key] for key in keys_repo} for item in resp.json()["items"]])
+                resultlist.append([{key:item[key] for key in RepoProperties} for item in resp.json()["items"]])
                 sleep(1)
             #break if Github deny more result
             else:
