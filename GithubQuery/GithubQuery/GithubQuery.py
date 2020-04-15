@@ -19,10 +19,10 @@ import ctypes
 from queue import Queue 
 from threading import Thread
 import concurrent.futures
+import tkinter as tk
+from tkinter import filedialog
 
-#FLAG, marked for extermination
-import random
-import string
+
 
 #FLAG
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
@@ -94,8 +94,8 @@ def GetRepoList(in_q = None, values=None):
 
     #loop until Github max query limit
     max_progress = 0
-    for i in range(1, 2):
-    #for i in itertools.count(1):
+    #for i in range(1, 2):
+    for i in itertools.count(1):
         with requests.Session() as s:
             parameters = {
                 "page": i,
@@ -148,8 +148,8 @@ def GetCommitList(RepoDict, values=None):
         headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
     resultlist = [[]]
-    for i in range(1,2):
-    #for i in itertools.count(1):
+    #for i in range(1,2):
+    for i in itertools.count(1):
         with requests.Session() as s:
             parameters = {
                 "page": i
@@ -312,39 +312,56 @@ def FilterCommits(CommitList, values=None):
             print("Wrong Tree")
     return resultlist
 
-def CollectData():
-    resultlist = []
-    mylist = GetRepoList()
-    for item in mylist:
-        resultlist.append(FilterCommits(GetCommitList(item)))   
-        #resultlist.append(GetCommitList(item))   
-        #jprint(resultlist)
-        print("MAIn")
 
-    resultlist = list(itertools.chain.from_iterable(resultlist))
-    
-    #jprint(resultlist)
-    resultlist = AddParents(resultlist)
-
-    #writes the results to a csv, easier to handle
-    DebugPrint()
-    jprint(resultlist)
-    with open('people.txt', 'w') as output_file:
+def WriteCommitsToFile(resultlist, file_path, in_q = None):
+    """Writes a Commitlist to a file"""
+    count = 1
+    with open(file_path+'/people.txt', 'w') as output_file:
+        output_file.write(str(len(resultlist))+"\n")
         for item in resultlist:
             html = item["html_url"]
             sha = item["sha"]
             output_file.write(html[:-(len(sha)+len("/commit/"))]+"\n")
             output_file.write(sha+"\n")
 
+            if in_q is not None:
+                in_q.put((count, len(resultlist)))
+            count = count+1
+    print("Succesful writing")
 
-def DownloadDatabase(inputpath="C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery\\GithubQuery\\people.txt", output_path = "E:/Repo"):
+def CollectData():
+    resultlist = []
+    mylist = GetRepoList()
+    for item in mylist:
+        #FLAG
+        #resultlist.append(FilterCommits(GetCommitList(item)))   
+        resultlist.append(GetCommitList(item))   
+        #jprint(resultlist)
+        print("MAIn")
+
+    resultlist = list(itertools.chain.from_iterable(resultlist))
+    
+    #jprint(resultlist)
+
+    #FLAG
+    #resultlist = AddParents(resultlist)
+
+    #writes the results to a csv, easier to handle
+    DebugPrint()
+    jprint(resultlist)
+    WriteCommitsToFile(resultlist, "")
+   
+
+
+def DownloadDatabase(inputpath="C:/Users/fazon/source/repos/Maven-Github_Database/GithubQuery/GithubQuery", output_path = "E:/Repo", in_q=None):
     """Downlaod the commits from inputpath to output_path"""
       
-    with open(inputpath) as fp:
+    with open(inputpath+"/people.txt") as fp:
+        maxprogress=int(fp.readline()[:-1])
         count =1
         html = fp.readline()
         sha = fp.readline()
-        os.system("E:")  
+        os.system(output_path.split(":")[0]+":")#needed to handle both / and \  
         while html:
             #removing the \n from the end
             html=html[:-1]
@@ -356,12 +373,13 @@ def DownloadDatabase(inputpath="C:\\Users\\fazon\\source\\repos\\Maven-Github_Da
             os.chdir(f"{output_path}/{count}")
             os.system(f"git checkout {sha}")
             os.chdir(output_path)
+            if in_q is not None:
+                in_q.put((count, maxprogress))
             count= count+1
             html = fp.readline()
             sha = fp.readline()
             print(count)
-            if count > 10:
-                break
+            
 
 
 def DebugPrint():
@@ -421,7 +439,7 @@ def Gui_GetRepositories(window, values, phase):
         return RepoList
 
 
-def Gui_GetCommits(window, values, RepoList):
+def Gui_GetCommits(window, values, RepoList, file_path):
     CommitList=[]
     
     count = 1
@@ -455,8 +473,8 @@ def Gui_GetCommits(window, values, RepoList):
             q = Queue()
             progress = (0, 0)
             window.Finalize()
-            window['lbl_Progbar2'].update(("Phase: "+str(3)+"/"+str(3)+" Adding Parents"))
-            window['Progbar2'].update_bar(3, 3)
+            window['lbl_Progbar2'].update(("Phase: "+str(3)+"/"+str(4)+" Adding Parents"))
+            window['Progbar2'].update_bar(3, 4)
             future3 = executor.submit(AddParents,CommitList, q)
             while not future3.done():
                 if not q.empty():
@@ -467,8 +485,25 @@ def Gui_GetCommits(window, values, RepoList):
                     
             CommitList = future3.result()
             window.Finalize()
-            #window['lbl_Progbar1'].update(("Adding Parents, progress: "+str(progress[1])+"/"+str(progress[1])))
-            #window['Progbar1'].update_bar(progress[1],  progress[1])
+        
+        q = Queue()
+        progress = (0, 0)
+        window.Finalize()
+        window['lbl_Progbar2'].update(("Phase: "+str(4)+"/"+str(4)+" Writing results to File"))
+        window['Progbar2'].update_bar(4, 4)
+        future4 = executor.submit(WriteCommitsToFile,CommitList,file_path, q)
+        while not future4.done():
+            if not q.empty():
+                progress = q.get()
+                window.Finalize()
+                window['lbl_Progbar1'].update(("Writing results to File, progress: "+str(progress[0])+"/"+str(progress[1])))
+                window['Progbar1'].update_bar(progress[0],  progress[1])
+        window['Progbar1'].update_bar(progress[1],  progress[1])
+        window['lbl_Progbar1'].update(("Writing results to File, progress: "+str(progress[1])+"/"+str(progress[1])))
+
+        window['lbl_Progbar2'].update(("Data collection is completed"))
+        #window['lbl_Progbar1'].update(("Adding Parents, progress: "+str(progress[1])+"/"+str(progress[1])))
+        #window['Progbar1'].update_bar(progress[1],  progress[1])
 
     return CommitList
     
@@ -476,7 +511,7 @@ def Gui_GetCommits(window, values, RepoList):
 
 def Gui_MainWindow():
     sg.theme('Dark Blue 13')
-
+    file_path = 'C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery'
  # Column layout      
     col_btn = [[sg.Button('GetRepositoires',key='btn_getrepos', size = (20, 3), font=(15))],      
             [sg.Button('GetCommits',key='btn_getcommits', size = (20, 3), font=(15))],      
@@ -501,7 +536,7 @@ def Gui_MainWindow():
 
     # layout the Window
     layout = [[sg.Column(col_btn),sg.Column(col_chbox), sg.Column(col_params)],
-              [sg.Button('Choose Location',key='btn_location', size = (20, 3)), sg.Text('C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery'), sg.Button('Start', key='btn_Start', size = (20, 3), pad=((300, 10), 30), font=(15))],
+              [sg.Button('Choose Location',key='btn_location', size = (20, 3)), sg.Text(file_path, key="lbl_location", size = (80,1)), sg.Button('Start', key='btn_Start', size = (25, 4), pad=((6, 10), 30), font=(15))],
               [sg.Text('', key="lbl_Progbar1",size=(100,1), auto_size_text=True)],
               [sg.ProgressBar(10, orientation='h', size=(96, 20), key='Progbar1')],
               [sg.Text('', key="lbl_Progbar2",size=(100,1), auto_size_text=True)],
@@ -539,7 +574,7 @@ def Gui_MainWindow():
                     RepoList=Gui_GetRepositories(window, values, phase)
 
                 if RepoList != None:    
-                    CommitList=Gui_GetCommits(window, values, RepoList)     
+                    CommitList=Gui_GetCommits(window, values, RepoList, file_path)     
                 print("btn_getcommits")
             elif event == 'btn_viewprojects':
                 print("btn_viewprojects")
@@ -552,8 +587,24 @@ def Gui_MainWindow():
                     #jprint(CommitList)
                     
             elif event == 'btn_Download':
-                print("btn_Download")
+                q = Queue()
+                progress = (0, 0)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    future5 = executor.submit(DownloadDatabase,file_path,file_path, q)
+                    while not future5.done():
+                        if not q.empty():
+                            progress = q.get()
+                        window.Finalize()
+                        window['lbl_Progbar1'].update(("Downloading the projects, progress: "+str(progress[0])+"/"+str(progress[1])))
+                        window['Progbar1'].update_bar(progress[0],progress[1])
+                    
             elif event == 'btn_location':
+                
+                new_file_path = filedialog.askdirectory()
+                if new_file_path is not "":
+                    file_path = new_file_path
+                    window["lbl_location"].update(file_path)
+                print(file_path)
                 print("btn_location")
             elif event == 'btn_Start':
                 print("btn_Start")
