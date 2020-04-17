@@ -78,6 +78,7 @@ def jprint(obj):
 def GetRepoList(in_q = None, values=None):
     """collects the github repository informations via Github API"""
     iterator = itertools.count(1)#loop until Github max query limit
+    headers = { 'Authorization' : 'token ' + MyOauth2Token }
     if values != None:
         headers = { 'Authorization' : 'token ' + values["txtbox_oauth2token"] }
         if values["ChBox_LimitRepos"]:
@@ -419,15 +420,28 @@ def Gui_GetRepositories(window, values, phase):
 
 
 def Gui_GetCommits(window, values, RepoList, file_path):
+    """
+    Handles the gathering of the commits while ensuring that the window won't freeze
+    input:  window:     The main window
+            values:     event values, contains the user input
+            RepoList:   List of the collected Repositories
+            file_path:  path to the outputfile
+    """
+
+    #clears previous results
     CommitList=[]
     
     count = 1
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+
+        
         for item in RepoList:     
             window.Finalize()
-            window['lbl_Progbar2'].update(("Phase: "+str(2)+"/"+str(3)+" Getting Commits"))
+            window['lbl_Progbar2'].update(("Phase: "+str(2)+"/"+str(4)+" Getting Commits"))
             window['Progbar2'].update_bar(2, 3)
             window['lbl_Progbar1'].update("Starting the query, please stand by")
+
+            #Getting Commits
             future = executor.submit(GetCommitList,item, values)
             while not future.done():
                 window.Finalize()
@@ -439,6 +453,8 @@ def Gui_GetCommits(window, values, RepoList, file_path):
                 window.Finalize()
                 window['lbl_Progbar1'].update(result)
                 break
+
+            #Filtering the Commits
             future2 = executor.submit(FilterCommits,result, values)
             while not future2.done():
                 window.Finalize()
@@ -448,13 +464,15 @@ def Gui_GetCommits(window, values, RepoList, file_path):
             count=count+1
             CommitList.append(result)
         CommitList = list(itertools.chain.from_iterable(CommitList))
-        if values["ChBox_AddParents"] or values["ChBox_DeafultParams"]:
-                
+
+        #Adding Parents
+        if values["ChBox_AddParents"] or values["ChBox_DeafultParams"]:                
             q = Queue()
             progress = (0, 0)
             window.Finalize()
             window['lbl_Progbar2'].update(("Phase: "+str(3)+"/"+str(4)+" Adding Parents"))
             window['Progbar2'].update_bar(3, 4)
+            
             future3 = executor.submit(AddParents,CommitList, q)
             while not future3.done():
                 if not q.empty():
@@ -466,6 +484,7 @@ def Gui_GetCommits(window, values, RepoList, file_path):
             CommitList = future3.result()
             window.Finalize()
         
+        #Writing to file
         q = Queue()
         progress = (0, 0)
         window.Finalize()
@@ -479,11 +498,10 @@ def Gui_GetCommits(window, values, RepoList, file_path):
                 window['lbl_Progbar1'].update(("Writing results to File, progress: "+str(progress[0])+"/"+str(progress[1])))
                 window['Progbar1'].update_bar(progress[0],  progress[1])
         window['Progbar1'].update_bar(progress[1],  progress[1])
-        window['lbl_Progbar1'].update(("Writing results to File, progress: "+str(progress[1])+"/"+str(progress[1])))
 
+
+        window['lbl_Progbar1'].update(("Writing results to File, progress: "+str(progress[1])+"/"+str(progress[1])))
         window['lbl_Progbar2'].update(("Data collection is completed"))
-        #window['lbl_Progbar1'].update(("Adding Parents, progress: "+str(progress[1])+"/"+str(progress[1])))
-        #window['Progbar1'].update_bar(progress[1],  progress[1])
 
     return CommitList
     
@@ -514,7 +532,7 @@ def Gui_MainWindow():
                   [sg.In(default_text=MyOauth2Token, size=(80, 1),key='txtbox_oauth2token')]]
 
 
-    # layout the Window
+    # Bottom
     layout = [[sg.Column(col_btn),sg.Column(col_chbox), sg.Column(col_params)],
               [sg.Button('Choose Location',key='btn_location', size = (20, 3)), sg.Text(file_path, key="lbl_location", size = (80,1)), sg.Button('Start', key='btn_Start', size = (25, 4), pad=((6, 10), 30), font=(15))],
               [sg.Text('', key="lbl_Progbar1",size=(100,1), auto_size_text=True)],
@@ -524,7 +542,7 @@ def Gui_MainWindow():
               [sg.Cancel()]]
 
     # create the Window
-    window = sg.Window('Custom Progress Meter', layout)
+    window = sg.Window('Database Builder', layout)
     # loop that would normally do something useful
     i = 0
     j = 0
@@ -628,10 +646,18 @@ def MakeTableData(Properties, DictList, CommitMode=False):
     return result
 
 def Gui_CreatePreview(DictList, Properties, CommitMode=False):
+    """
+    Window for browsing the query results
+    input:  DictList: list of dictionaries
+            Properties: which keys should the program show
+                Note: can't show nested properties
+            CommitMode: if true, then shows the commit messages first line
+                        else it shows only the wanted properties
+    """
     sg.theme('Dark Blue 13')
 
 
-    # ------ Make the Table Data ------
+    # ------ Prepare the data for the table ------
    
     data = MakeTableData(Properties, DictList, CommitMode)    
     headings = Properties if not CommitMode else ["Name", "Message"] +Properties
