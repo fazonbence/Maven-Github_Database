@@ -26,7 +26,7 @@ from tkinter import filedialog
 
 
 #FLAG
-MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
+MyOauth2Token = '268dff148ab39a176e11c2d1513b4e10439ed30c '
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
  #Which properties are needed in the query
