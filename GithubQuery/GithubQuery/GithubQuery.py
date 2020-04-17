@@ -7,6 +7,7 @@ __version__ = "0.1"
 __author__ = "Bence Fazekas"
 
 import os
+import sys
 import requests
 from requests.auth import HTTPDigestAuth
 import json
@@ -28,7 +29,7 @@ from tkinter import filedialog
 MyOauth2Token = 'd9799af140fe1be693a8ab74584e8f6e009a463f'
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
- #Which properties are needed
+ #Which properties are needed in the query
 CommitProperties = [
         "html_url",                
          "parents",
@@ -47,8 +48,7 @@ RepoProperties = [
          "url"
     ]
 
-
-
+#Which properties should be displayed
 DisplayableRepoProperties = [
         "name",   
         "forks_count",
@@ -77,8 +77,11 @@ def jprint(obj):
 
 def GetRepoList(in_q = None, values=None):
     """collects the github repository informations via Github API"""
+    iterator = itertools.count(1)#loop until Github max query limit
     if values != None:
         headers = { 'Authorization' : 'token ' + values["txtbox_oauth2token"] }
+        if values["ChBox_LimitRepos"]:
+            iterator = range(1, 2)
     else:
         headers = { 'Authorization' : 'token ' + MyOauth2Token }
     
@@ -92,10 +95,10 @@ def GetRepoList(in_q = None, values=None):
         queryParams=values["txtbox_queryparam"]
     resultlist = []
 
-    #loop until Github max query limit
+    
     max_progress = 0
-    #for i in range(1, 2):
-    for i in itertools.count(1):
+    
+    for i in iterator:
         with requests.Session() as s:
             parameters = {
                 "page": i,
@@ -104,10 +107,7 @@ def GetRepoList(in_q = None, values=None):
             
             s.headers.update(headers)
             resp = s.get(url_repo, params=parameters)
-            print("--------")
-            print(resp.status_code)
-            #jprint(resp.json())
-            print("--------")
+            
             #if the sessions is OK
             if resp.status_code == 401:
                 return "Error code 401: please check the Ouath2Token"
@@ -116,6 +116,7 @@ def GetRepoList(in_q = None, values=None):
                 if in_q is not None:
                     max_progress=resp.json()['total_count']/30
                     if max_progress > 34: max_progress=34
+                    if values["ChBox_LimitRepos"]: max_progress=1
                     #print(max_progress)
                     in_q.put((i, max_progress))
                 sleep(1)
@@ -124,9 +125,9 @@ def GetRepoList(in_q = None, values=None):
                 print(i)
                 in_q.put((max_progress, max_progress))
                 break
+            print("Getting Repos "+str(i)+"/"+str(max_progress))
 
     #merge the lists
-
     resultlist = list(itertools.chain.from_iterable(resultlist))
     return resultlist
 
@@ -138,45 +139,42 @@ def GetCommitList(RepoDict, values=None):
     output: commits containing 'fix' or 'bug' keywords as a dictianary
     """
     #qeuery parameters
-
+    iterator = itertools.count(1)
     queryParams = 'bug+in:message'
     if values != None:
         headers = { 'Authorization' : 'token ' + values["txtbox_oauth2token"] }
         if not values["ChBox_DeafultParams"]:
             queryParams = values["txtbox_commitmessage"]
+        if values["ChBox_LimitCommits"]:
+            iterator = range(1, 2)
     else:        
         headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
     resultlist = [[]]
-    #for i in range(1,2):
-    for i in itertools.count(1):
+    for i in iterator:
         with requests.Session() as s:
             parameters = {
                 "page": i
                 ,"q": queryParams
                 }
             s.headers.update(headers)
-            #print(RepoDict["commits_url"][:-6])
             resp = s.get(RepoDict["commits_url"][:-6], params=parameters)
-            #jprint(resp.json())
             if resp.status_code == 401:
                 return "Error code 401: please check the Ouath2Token"
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
-                #print(getDictKeys(resp.json()[0]))
-                ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]#if "bug" in item["commit"]["message"]
+                ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]                
+
                 if ListItem != resultlist[-1]:
                     resultlist.append(ListItem)
                 sleep(1)
             #break if Github deny more result
             else:
                 break
-
+    #merging the lists
     resultlist = list(itertools.chain.from_iterable(resultlist))
-    #jprint(resultlist)
     
     return ChooseCommits(resultlist, 10)
-    return resultlist
 
 def ChooseCommits(CommitList, CommitNumber):
     """
@@ -188,14 +186,11 @@ def ChooseCommits(CommitList, CommitNumber):
     if length<CommitNumber:
         return CommitList
     resultlist=[]
-    #resultlist.append(CommitList[0])
     DebugPrint()
     for i in range(CommitNumber):
         print(round(length*0.1*i))
         resultlist.append(CommitList[round(length*0.1*i)])
-    #resultlist.append(CommitList[length-1])
-    print("Wise choice indeed!")
-    #jprint(resultlist)
+    print("The Commits have been chosen!")
     DebugPrint()
     return resultlist
 
@@ -216,10 +211,9 @@ def AddParents(CommitList,in_q = None):
                 s.headers.update(headers)
                 try:
                     resp = s.get(item["parents"][0]["url"])
-                    if resp.status_code == 200 and len(resp.json())>0:                        
-                        
-                        #jprint(resp.json())
+                    if resp.status_code == 200 and len(resp.json())>0:      
                         NewItem = {key:resp.json()[key] for key in CommitProperties}
+
                         if NewItem not in CommitList:
                             print("Successful")
                             resultlist.append(NewItem)
@@ -273,7 +267,6 @@ def GetTree(TreeUrl):
         s.headers.update(headers)
         resp = s.get(TreeUrl)
         return resp.json()
-    #CommitDict["commit"]["tree"]["url"]
 
 def FilterCommits(CommitList, values=None):
     """
@@ -298,16 +291,12 @@ def FilterCommits(CommitList, values=None):
                     for file in Tree["tree"]:
                         if file["path"]=="pom.xml":
                             #if the commit contains a pom.xml file, then we need it
-                            #return CommitList                            
                             resultlist.append(item)                            
                             cond = True
                             break
-                
-                    #if the latest version doesn't contains the pom.xml file, 
-          
                 except :
                     print("other error")
-            print("lucky find!" if cond else "Missing have pom.xml")
+            print("lucky find!" if cond else "Missing pom.xml")
         except :
             print("Wrong Tree")
     return resultlist
@@ -332,24 +321,20 @@ def WriteCommitsToFile(resultlist, file_path, in_q = None):
 def CollectData():
     resultlist = []
     mylist = GetRepoList()
+    count = 0
     for item in mylist:
-        #FLAG
-        #resultlist.append(FilterCommits(GetCommitList(item)))   
-        resultlist.append(GetCommitList(item))   
-        #jprint(resultlist)
-        print("MAIn")
+        resultlist.append(FilterCommits(GetCommitList(item))) 
+        count = count+1
+        print("Collecting Commits: "+str(count)+"/"+str(len(mylist)))
 
+    #merging the lists
     resultlist = list(itertools.chain.from_iterable(resultlist))
-    
-    #jprint(resultlist)
+   
+    resultlist = AddParents(resultlist)
 
-    #FLAG
-    #resultlist = AddParents(resultlist)
-
-    #writes the results to a csv, easier to handle
-    DebugPrint()
-    jprint(resultlist)
+    print("Query is completed writing results to a file")
     WriteCommitsToFile(resultlist, "")
+    print("Writing was succesful")
    
 
 
@@ -361,6 +346,7 @@ def DownloadDatabase(inputpath="C:/Users/fazon/source/repos/Maven-Github_Databas
         count =1
         html = fp.readline()
         sha = fp.readline()
+        
         os.system(output_path.split(":")[0]+":")#needed to handle both / and \  
         while html:
             #removing the \n from the end
@@ -368,6 +354,7 @@ def DownloadDatabase(inputpath="C:/Users/fazon/source/repos/Maven-Github_Databas
             sha=sha[:-1]
             os.chdir(output_path)
 
+            #downloading the correct version
             os.system(f"cd {output_path}")
             os.system(f"git clone -n {html} {count}")
             os.chdir(f"{output_path}/{count}")
@@ -394,12 +381,6 @@ def DebugPrint():
     print("################")
 
 
-
-
-
-
-
-
 def Gui_GetRepositories(window, values, phase):    
     q = Queue()
     RepoList = None
@@ -421,10 +402,8 @@ def Gui_GetRepositories(window, values, phase):
                 window['lbl_Progbar1'].update(("Getting Repositories, progress: "+str(progress[0])+"/"+str(progress[1])))
                 
                 window.Finalize()
-                #txt_label.Update('Getting Repositories {}/{}')
                 window['Progbar1'].update_bar(progress[0], progress[1])
                 
-            #print(i)
             if not q.empty():
                 progress = q.get()
         result = future.result()
@@ -453,7 +432,8 @@ def Gui_GetCommits(window, values, RepoList, file_path):
             while not future.done():
                 window.Finalize()
                 window['lbl_Progbar1'].update(("Getting Commits, progress: "+str(count)+"/"+str(len(RepoList))))
-                window['Progbar1'].update_bar(count, len(RepoList))
+                window['Progbar1'].update_bar(count, len(RepoList))    
+                
             result=future.result()
             if type(result) is not list:
                 window.Finalize()
@@ -523,8 +503,8 @@ def Gui_MainWindow():
             [sg.Checkbox('Use Default parameters', size=(20, 1),  key='ChBox_DeafultParams', default=True)],
             [sg.Checkbox('AddParents', size=(20, 1), key='ChBox_AddParents')],      
             [sg.Checkbox('Search pom.xml', size=(20, 1), key='ChBox_SearchPom')],        
-            [sg.Checkbox('Limit Commits', size=(20, 1), key='ChBox_LimitCommits')],
-            [sg.Checkbox('Limits Results', size=(20, 1), key='ChBox_Limitresults')]]      
+            [sg.Checkbox('Limit Repository Number', size=(20, 1), key='ChBox_LimitRepos')],
+            [sg.Checkbox('Limits Commit Number', size=(20, 1), key='ChBox_LimitCommits')]]      
 
     col_params =  [[sg.Text('Query parameters:')],
                   [sg.In(default_text='https://repo1.maven.org/+in:readme' ,key='txtbox_queryparam', size=(80, 1))],
@@ -579,11 +559,15 @@ def Gui_MainWindow():
             elif event == 'btn_viewprojects':
                 print("btn_viewprojects")
                 if RepoList is not None:
+                    window.Hide()
                     Gui_CreatePreview(RepoList, DisplayableRepoProperties, False)
+                    window.UnHide()
             elif event == 'btn_viewcommits':
                 print("btn_viewcommits")
                 if CommitList is not None:
+                    window.Hide()
                     Gui_CreatePreview(CommitList, DisplayableCommitProperties, True)
+                    window.UnHide()
                     #jprint(CommitList)
                     
             elif event == 'btn_Download':
@@ -601,7 +585,7 @@ def Gui_MainWindow():
             elif event == 'btn_location':
                 
                 new_file_path = filedialog.askdirectory()
-                if new_file_path is not "":
+                if new_file_path != "":
                     file_path = new_file_path
                     window["lbl_location"].update(file_path)
                 print(file_path)
@@ -610,13 +594,6 @@ def Gui_MainWindow():
                 print("btn_Start")
        
    
-
-        #így lehet updatelni a max méretet
-        #window['Progbar2'].update_bar(i + 1, 10000)
-
-
-    
-    # done with loop... need to destroy the window as it's still open
     window.close()
 
 def copy2clip(txt):
@@ -671,9 +648,9 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
                         # alternating_row_color='lightyellow',
                         key='-TABLE-',
                         tooltip='List of the Repositories')],
-              [sg.Button('Copy url'),sg.Button('Copy html url'), sg.Button('Back')],
-              [sg.Text('Read = read which rows are selected')],
-              [sg.Text('Change Colors = Changes the colors of rows 8 and 9')]]
+              [sg.Button('Copy Url'),sg.Button('Copy Html Url'), sg.Button('Back')],
+              [sg.Text('Copy Url = Copies the API link')],
+              [sg.Text('Copy Html Url =  Copies the HTML link')]]
 
     # ------ Create Window ------
     window = sg.Window('The Table Element', layout)
@@ -733,5 +710,3 @@ Gui_MainWindow()
 
 #ProjectPreview
 #RepoList=GetRepoList()
-
-
