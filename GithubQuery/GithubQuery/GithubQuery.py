@@ -14,6 +14,7 @@ import json
 import itertools
 import csv
 import subprocess
+import multiprocessing as mp
 from time import sleep
 import PySimpleGUI as sg
 import ctypes
@@ -26,7 +27,7 @@ from tkinter import filedialog
 
 
 #FLAG
-MyOauth2Token = '268dff148ab39a176e11c2d1513b4e10439ed30c '
+MyOauth2Token = '392abded4000fa0c8c53e02146cce93694c93a2d'
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
  #Which properties are needed in the query
@@ -84,7 +85,8 @@ def GetRepoList(in_q = None, values=None):
         if values["ChBox_LimitRepos"]:
             iterator = range(1, 2)
     else:
-        headers = { 'Authorization' : 'token ' + MyOauth2Token }
+        if not values["ChBox_DeafultParams"]:
+            headers = { 'Authorization' : 'token ' + MyOauth2Token }
     
     url_repo = "https://api.github.com/search/repositories?q"
     
@@ -119,6 +121,8 @@ def GetRepoList(in_q = None, values=None):
                     if max_progress > 34: max_progress=34
                     if values["ChBox_LimitRepos"]: max_progress=1
                     #print(max_progress)
+                    if i>max_progress+1: 
+                        break
                     in_q.put((i, max_progress))
                 sleep(1)
             #break if Github deny more result
@@ -139,13 +143,24 @@ def GetCommitList(RepoDict, values=None):
     input: A Repo's dictionary
     output: commits containing 'fix' or 'bug' keywords as a dictianary
     """
-    #qeuery parameters
+    #qeuery parameters    
     iterator = itertools.count(1)
+    #default parameters
+    keywordlist = ["bug", "fix"]
     queryParams = 'bug+in:message'
+
+    #parameters from the user
     if values != None:
         headers = { 'Authorization' : 'token ' + values["txtbox_oauth2token"] }
         if not values["ChBox_DeafultParams"]:
-            queryParams = values["txtbox_commitmessage"]
+            if ',' in values["txtbox_commitmessage"]:
+                keywordlist = values["txtbox_commitmessage"].split(",")
+               
+            else:
+                keywordlist = [values["txtbox_commitmessage"]]
+
+            queryParams = '+'.join(keywordlist)+"+in:message"
+            
         if values["ChBox_LimitCommits"]:
             iterator = range(1, 2)
     else:        
@@ -164,7 +179,11 @@ def GetCommitList(RepoDict, values=None):
                 return "Error code 401: please check the Ouath2Token"
             #if the sessions is OK
             if resp.status_code == 200 and len(resp.json())>0:
-                ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]                
+                
+                #ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]                
+
+                ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() for substr in keywordlist if substr in item["commit"]["message"]]                
+
 
                 if ListItem != resultlist[-1]:
                     resultlist.append(ListItem)
@@ -398,6 +417,12 @@ def Gui_GetRepositories(window, values, phase):
         future = executor.submit(GetRepoList, q, values)
         progress = (-1, -1)
         while not future.done():
+            event, _ = window.read(0.1)           
+            if event is None:
+                print("Jello")
+                executor._threads.clear()
+                concurrent.futures.thread._threads_queues.clear()
+                sys.exit()
             if (-1,-1) != progress:
                 window.Finalize()
                 window['lbl_Progbar1'].update(("Getting Repositories, progress: "+str(progress[0])+"/"+str(progress[1])))
@@ -438,7 +463,7 @@ def Gui_GetCommits(window, values, RepoList, file_path):
         for item in RepoList:     
             window.Finalize()
             window['lbl_Progbar2'].update(("Phase: "+str(2)+"/"+str(4)+" Getting Commits"))
-            window['Progbar2'].update_bar(2, 3)
+            window['Progbar2'].update_bar(2, 4)
             window['lbl_Progbar1'].update("Starting the query, please stand by")
 
             #Getting Commits
@@ -455,12 +480,13 @@ def Gui_GetCommits(window, values, RepoList, file_path):
                 break
 
             #Filtering the Commits
-            future2 = executor.submit(FilterCommits,result, values)
-            while not future2.done():
-                window.Finalize()
-                window['lbl_Progbar1'].update(("Filtering Commits, progress: "+str(count)+"/"+str(len(RepoList))))
-                window['Progbar1'].update_bar(count+1,  len(RepoList))      
-            result = future2.result()
+            if values["ChBox_SearchPom"] or values["ChBox_DeafultParams"]:  
+                future2 = executor.submit(FilterCommits,result, values)
+                while not future2.done():
+                    window.Finalize()
+                    window['lbl_Progbar1'].update(("Filtering Commits, progress: "+str(count)+"/"+str(len(RepoList))))
+                    window['Progbar1'].update_bar(count+1,  len(RepoList))      
+                result = future2.result()
             count=count+1
             CommitList.append(result)
         CommitList = list(itertools.chain.from_iterable(CommitList))
@@ -503,23 +529,35 @@ def Gui_GetCommits(window, values, RepoList, file_path):
         window['lbl_Progbar1'].update(("Writing results to File, progress: "+str(progress[1])+"/"+str(progress[1])))
         window['lbl_Progbar2'].update(("Data collection is completed"))
 
+    sg.SystemTray.notify('Query Completed', 'The application succesfully collected the projects')
     return CommitList
     
-
+def Gui_DownloadCommits(window, values,file_path):
+    q = Queue()
+    progress = (0, 0)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future5 = executor.submit(DownloadDatabase,file_path,file_path, q)
+        while not future5.done():
+            if not q.empty():
+                progress = q.get()
+            window.Finalize()
+            window['lbl_Progbar1'].update(("Downloading the projects, progress: "+str(progress[0])+"/"+str(progress[1])))
+            window['Progbar1'].update_bar(progress[0],progress[1])
+    sg.SystemTray.notify('Download Completed', 'The application succesfully downloaded the projects')
 
 def Gui_MainWindow():
     sg.theme('Dark Blue 13')
     file_path = 'C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery'
  # Column layout      
-    col_btn = [[sg.Button('GetRepositoires',key='btn_getrepos', size = (20, 3), font=(15))],      
-            [sg.Button('GetCommits',key='btn_getcommits', size = (20, 3), font=(15))],      
+    col_btn = [[sg.Button('Get Repositoires',key='btn_getrepos', size = (20, 3), font=(15))],      
+            [sg.Button('Get Commits',key='btn_getcommits', size = (20, 3), font=(15))],      
             [sg.Button('Preview Projects',key='btn_viewprojects', size = (20, 3), font=(15))],
             [sg.Button('Preview Commits',key='btn_viewcommits', size = (20, 3), font=(15))],
             [sg.Button('Download Database',key='btn_Download', size = (20, 3), font=(15))]]      
 
     col_chbox =  [[sg.Text('Search Parameters:')],
             [sg.Checkbox('Use Default parameters', size=(20, 1),  key='ChBox_DeafultParams', default=True)],
-            [sg.Checkbox('AddParents', size=(20, 1), key='ChBox_AddParents')],      
+            [sg.Checkbox('Add Parents', size=(20, 1), key='ChBox_AddParents')],      
             [sg.Checkbox('Search pom.xml', size=(20, 1), key='ChBox_SearchPom')],        
             [sg.Checkbox('Limit Repository Number', size=(20, 1), key='ChBox_LimitRepos')],
             [sg.Checkbox('Limits Commit Number', size=(20, 1), key='ChBox_LimitCommits')]]      
@@ -527,7 +565,7 @@ def Gui_MainWindow():
     col_params =  [[sg.Text('Query parameters:')],
                   [sg.In(default_text='https://repo1.maven.org/+in:readme' ,key='txtbox_queryparam', size=(80, 1))],
                   [sg.Text('Commit message filter:')],
-                  [sg.In(default_text='bug+in:message', size=(80, 1),key='txtbox_commitmessage')],
+                  [sg.In(default_text='bug, fix', size=(80, 1),key='txtbox_commitmessage')],
                   [sg.Text('Oauth2Token:')],
                   [sg.In(default_text=MyOauth2Token, size=(80, 1),key='txtbox_oauth2token')]]
 
@@ -538,27 +576,22 @@ def Gui_MainWindow():
               [sg.Text('', key="lbl_Progbar1",size=(100,1), auto_size_text=True)],
               [sg.ProgressBar(10, orientation='h', size=(96, 20), key='Progbar1')],
               [sg.Text('', key="lbl_Progbar2",size=(100,1), auto_size_text=True)],
-              [sg.ProgressBar(3000, orientation='h', size=(96, 20), key='Progbar2')],
-              [sg.Cancel()]]
+              [sg.ProgressBar(3000, orientation='h', size=(96, 20), key='Progbar2')]]
 
     # create the Window
     window = sg.Window('Database Builder', layout)
-    # loop that would normally do something useful
-    i = 0
-    j = 0
 
-    #initializing
+    
     RepoList = None
     CommitList = None
-
+    exit_event = mp.Event() #ilyet akkor kell ha vannak ebből a processből még processek, neked szerintem ez nem kell
     while True:
-        i = i+1
-    
-        # check to see if the cancel button was clicked and exit loop if clicked
+   
         event, values = window.read(timeout=0)
         if event != '__TIMEOUT__':
             print(values)
-            if event == 'Cancel' or event is None:
+            if event == 'Cancel' or event is None:                
+                print("ineteresting")
                 break    
             elif event == 'btn_getrepos':
                 phase=(1, 1)
@@ -568,7 +601,7 @@ def Gui_MainWindow():
                 if RepoList != None:
                     print(RepoList)
                 else:
-                    phase=(1, 3)
+                    phase=(1, 4)
                     RepoList=Gui_GetRepositories(window, values, phase)
 
                 if RepoList != None:    
@@ -576,29 +609,19 @@ def Gui_MainWindow():
                 print("btn_getcommits")
             elif event == 'btn_viewprojects':
                 print("btn_viewprojects")
-                if RepoList is not None:
+                if RepoList is not None and len(RepoList)>0:
                     window.Hide()
                     Gui_CreatePreview(RepoList, DisplayableRepoProperties, False)
                     window.UnHide()
             elif event == 'btn_viewcommits':
                 print("btn_viewcommits")
-                if CommitList is not None:
+                if CommitList is not None and len(CommitList)>0:
                     window.Hide()
                     Gui_CreatePreview(CommitList, DisplayableCommitProperties, True)
                     window.UnHide()
-                    #jprint(CommitList)
                     
             elif event == 'btn_Download':
-                q = Queue()
-                progress = (0, 0)
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    future5 = executor.submit(DownloadDatabase,file_path,file_path, q)
-                    while not future5.done():
-                        if not q.empty():
-                            progress = q.get()
-                        window.Finalize()
-                        window['lbl_Progbar1'].update(("Downloading the projects, progress: "+str(progress[0])+"/"+str(progress[1])))
-                        window['Progbar1'].update_bar(progress[0],progress[1])
+                Gui_DownloadCommits(window, values, file_path)                
                     
             elif event == 'btn_location':
                 
@@ -611,7 +634,7 @@ def Gui_MainWindow():
             elif event == 'btn_Start':
                 print("btn_Start")
        
-   
+    sys.exit()
     window.close()
 
 def copy2clip(txt):
@@ -655,7 +678,11 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
                         else it shows only the wanted properties
     """
     sg.theme('Dark Blue 13')
-
+    name=""
+    if CommitMode:
+        name = "Commits"
+    else:
+        name = "Projects"
 
     # ------ Prepare the data for the table ------
    
@@ -665,7 +692,7 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
    
 
     # ------ Window Layout ------
-    layout = [[sg.Table(values=data[1:][:], headings=headings, max_col_width=25,
+    layout = [[sg.Table(values=data[0:][:], headings=headings, max_col_width=25,
                         # background_color='light blue',
                         auto_size_columns=True,
                         display_row_numbers=True,
@@ -679,7 +706,7 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
               [sg.Text('Copy Html Url =  Copies the HTML link')]]
 
     # ------ Create Window ------
-    window = sg.Window('The Table Element', layout)
+    window = sg.Window('Preview '+name, layout)
 
     # ------ Event Loop ------
     while True:
@@ -687,7 +714,8 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
         print(event, values)
         if event is None:
             break
-        if event == 'Copy html url':
+        if event == 'Copy Html Url':
+            print("enter")
             if len(values['-TABLE-'])==1:
                 print(values['-TABLE-'][0])
                 url=""
@@ -696,8 +724,9 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
                 else:
                     url = window['-TABLE-'].Values[values['-TABLE-'][0]][len(Properties)]
                 print(url)
+                print("asd")
                 copy2clip(url)
-        if event == 'Copy url':
+        if event == 'Copy Url':
             if len(values['-TABLE-'])==1:
                 print(values['-TABLE-'][0])
                 url=""
@@ -709,7 +738,6 @@ def Gui_CreatePreview(DictList, Properties, CommitMode=False):
                 copy2clip(url)
         elif event == 'Back':
             break
-
     window.close()
 
 #RepoTest
