@@ -23,11 +23,12 @@ from threading import Thread
 import concurrent.futures
 import tkinter as tk
 from tkinter import filedialog
-
+import pathlib
+import math
 
 
 #FLAG
-MyOauth2Token = '392abded4000fa0c8c53e02146cce93694c93a2d'
+MyOauth2Token = ''
 headers = { 'Authorization' : 'token ' + MyOauth2Token }
 
  #Which properties are needed in the query
@@ -63,7 +64,7 @@ DisplayableCommitProperties = [
         "url"
     ]
 
-def getDictKeys(dict): 
+def getDictKeys(dict) : 
     """returns all keys from a dictionary as a list"""
     list = [] 
     for key in dict.keys(): 
@@ -117,11 +118,11 @@ def GetRepoList(in_q = None, values=None):
             if resp.status_code == 200 and len(resp.json())>0:
                 resultlist.append([{key:item[key] for key in RepoProperties} for item in resp.json()["items"]])
                 if in_q is not None:
-                    max_progress=resp.json()['total_count']/30
+                    max_progress=math.ceil(resp.json()['total_count']/30)
                     if max_progress > 34: max_progress=34
                     if values["ChBox_LimitRepos"]: max_progress=1
                     #print(max_progress)
-                    if i>max_progress+1: 
+                    if i>max_progress: 
                         break
                     in_q.put((i, max_progress))
                 sleep(1)
@@ -178,12 +179,8 @@ def GetCommitList(RepoDict, values=None):
             if resp.status_code == 401:
                 return "Error code 401: please check the Ouath2Token"
             #if the sessions is OK
-            if resp.status_code == 200 and len(resp.json())>0:
-                
-                #ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() if "bug" in item["commit"]["message"] or "fix" in item["commit"]["message"]]                
-
+            if resp.status_code == 200 and len(resp.json())>0:        
                 ListItem = [{key:item[key] for key in CommitProperties} for item in resp.json() for substr in keywordlist if substr in item["commit"]["message"]]                
-
 
                 if ListItem != resultlist[-1]:
                     resultlist.append(ListItem)
@@ -255,9 +252,9 @@ def AddParents(CommitList,in_q = None):
                 for parent in item["parents"]:
                     try:                    
                         resp = s.get(parent["url"])
-                        if resp.status_code == 200 and len(resp.json())>0:          
-                            #jprint(resp.json())
+                        if resp.status_code == 200 and len(resp.json())>0:   
                             NewItem = {key:resp.json()[key] for key in CommitProperties}
+
                             if NewItem not in CommitList:
                                 print("Successful")
                                 resultlist.append(NewItem)
@@ -303,9 +300,7 @@ def FilterCommits(CommitList, values=None):
         cond = False
         try:
             Tree = GetTree(item["commit"]["tree"]["url"])
-            #jprint(Tree)
 
-            #print(type(Tree))
             if type(Tree) is dict and Tree is not {}:
                 try:
                     for file in Tree["tree"]:
@@ -325,7 +320,7 @@ def FilterCommits(CommitList, values=None):
 def WriteCommitsToFile(resultlist, file_path, in_q = None):
     """Writes a Commitlist to a file"""
     count = 1
-    with open(file_path+'/people.txt', 'w') as output_file:
+    with open(file_path+'/QueryResults.txt', 'w') as output_file:
         output_file.write(str(len(resultlist))+"\n")
         for item in resultlist:
             html = item["html_url"]
@@ -358,10 +353,12 @@ def CollectData():
    
 
 
-def DownloadDatabase(inputpath="C:/Users/fazon/source/repos/Maven-Github_Database/GithubQuery/GithubQuery", output_path = "E:/Repo", in_q=None):
-    """Downlaod the commits from inputpath to output_path"""
-      
-    with open(inputpath+"/people.txt") as fp:
+def DownloadDatabase(input_path="C:/Users/fazon/source/repos/Maven-Github_Database/GithubQuery/GithubQuery", output_path = "E:/Repo", in_q=None):
+    """Downlaod the commits from input_path to output_path"""
+    
+    input_path = str(input_path)
+    output_path = str(output_path)
+    with open(input_path+"/QueryResults.txt") as fp:
         maxprogress=int(fp.readline()[:-1])
         count =1
         html = fp.readline()
@@ -401,7 +398,14 @@ def DebugPrint():
     print("################")
 
 
-def Gui_GetRepositories(window, values, phase):    
+def Gui_GetRepositories(window, values, phase):   
+    """
+    Handles the gathering of the repositories while ensuring that the window won't freeze
+    input:  window:     The main window
+            values:     event values, contains the user input
+            phase:      contains information about the role of this function in the total workflow 
+            
+    """
     q = Queue()
     RepoList = None
     #FLAG
@@ -419,7 +423,8 @@ def Gui_GetRepositories(window, values, phase):
         while not future.done():
             event, _ = window.read(0.1)           
             if event is None:
-                print("Jello")
+                #Stopping threads in case of exit is pressed
+                print("Terminating threads")
                 executor._threads.clear()
                 concurrent.futures.thread._threads_queues.clear()
                 sys.exit()
@@ -469,6 +474,13 @@ def Gui_GetCommits(window, values, RepoList, file_path):
             #Getting Commits
             future = executor.submit(GetCommitList,item, values)
             while not future.done():
+                event, _ = window.read(0.1)           
+                if event is None:
+                    #Stopping threads in case of exit is pressed
+                    print("Terminating threads")
+                    executor._threads.clear()
+                    concurrent.futures.thread._threads_queues.clear()
+                    sys.exit()
                 window.Finalize()
                 window['lbl_Progbar1'].update(("Getting Commits, progress: "+str(count)+"/"+str(len(RepoList))))
                 window['Progbar1'].update_bar(count, len(RepoList))    
@@ -483,6 +495,13 @@ def Gui_GetCommits(window, values, RepoList, file_path):
             if values["ChBox_SearchPom"] or values["ChBox_DeafultParams"]:  
                 future2 = executor.submit(FilterCommits,result, values)
                 while not future2.done():
+                    event, _ = window.read(0.1)           
+                    if event is None:
+                        #Stopping threads in case of exit is pressed
+                        print("Terminating threads")
+                        executor._threads.clear()
+                        concurrent.futures.thread._threads_queues.clear()
+                        sys.exit()
                     window.Finalize()
                     window['lbl_Progbar1'].update(("Filtering Commits, progress: "+str(count)+"/"+str(len(RepoList))))
                     window['Progbar1'].update_bar(count+1,  len(RepoList))      
@@ -501,6 +520,13 @@ def Gui_GetCommits(window, values, RepoList, file_path):
             
             future3 = executor.submit(AddParents,CommitList, q)
             while not future3.done():
+                event, _ = window.read(0.1)           
+                if event is None:
+                    #Stopping threads in case of exit is pressed
+                    print("Terminating threads")
+                    executor._threads.clear()
+                    concurrent.futures.thread._threads_queues.clear()
+                    sys.exit()
                 if not q.empty():
                     progress = q.get()
                 window.Finalize()
@@ -519,6 +545,13 @@ def Gui_GetCommits(window, values, RepoList, file_path):
         future4 = executor.submit(WriteCommitsToFile,CommitList,file_path, q)
         while not future4.done():
             if not q.empty():
+                event, _ = window.read(0.1)           
+                if event is None:
+                    #Stopping threads in case of exit is pressed
+                    print("Terminating threads")
+                    executor._threads.clear()
+                    concurrent.futures.thread._threads_queues.clear()
+                    sys.exit()
                 progress = q.get()
                 window.Finalize()
                 window['lbl_Progbar1'].update(("Writing results to File, progress: "+str(progress[0])+"/"+str(progress[1])))
@@ -538,6 +571,13 @@ def Gui_DownloadCommits(window, values,file_path):
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         future5 = executor.submit(DownloadDatabase,file_path,file_path, q)
         while not future5.done():
+            event, _ = window.read(0.1)
+            if event is None:
+                    #Stopping threads in case of exit is pressed
+                    print("Terminating threads")
+                    executor._threads.clear()
+                    concurrent.futures.thread._threads_queues.clear()
+                    sys.exit()
             if not q.empty():
                 progress = q.get()
             window.Finalize()
@@ -547,7 +587,9 @@ def Gui_DownloadCommits(window, values,file_path):
 
 def Gui_MainWindow():
     sg.theme('Dark Blue 13')
-    file_path = 'C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery'
+    
+    #file_path = 'C:\\Users\\fazon\\source\\repos\\Maven-Github_Database\\GithubQuery'
+    file_path = pathlib.Path(__file__).parent.absolute()
  # Column layout      
     col_btn = [[sg.Button('Get Repositoires',key='btn_getrepos', size = (20, 3), font=(15))],      
             [sg.Button('Get Commits',key='btn_getcommits', size = (20, 3), font=(15))],      
@@ -584,7 +626,7 @@ def Gui_MainWindow():
     
     RepoList = None
     CommitList = None
-    exit_event = mp.Event() #ilyet akkor kell ha vannak ebből a processből még processek, neked szerintem ez nem kell
+    exit_event = mp.Event()
     while True:
    
         event, values = window.read(timeout=0)
@@ -632,7 +674,10 @@ def Gui_MainWindow():
                 print(file_path)
                 print("btn_location")
             elif event == 'btn_Start':
-                print("btn_Start")
+                phase = (1, 4)
+                RepoList=Gui_GetRepositories(window, values, phase)
+                CommitList=Gui_GetCommits(window, values, RepoList, file_path)
+                Gui_DownloadCommits(window, values, file_path)  
        
     sys.exit()
     window.close()
