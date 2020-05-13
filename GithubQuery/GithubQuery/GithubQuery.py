@@ -110,7 +110,11 @@ def GetRepoList(in_q = None, values=None):
                 }
             
             s.headers.update(headers)
-            resp = s.get(url_repo, params=parameters)
+            try:
+                resp = s.get(url_repo, params=parameters)
+            except :
+                return "Github server is unreachable please check your internet connection"
+            
             
             #if the sessions is OK
             if resp.status_code == 401:
@@ -175,7 +179,11 @@ def GetCommitList(RepoDict, values=None):
                 ,"q": queryParams
                 }
             s.headers.update(headers)
-            resp = s.get(RepoDict["commits_url"][:-6], params=parameters)
+            try:
+                resp = s.get(RepoDict["commits_url"][:-6], params=parameters)
+            except :
+                return "Github server is unreachable please check your internet connection"
+            
             if resp.status_code == 401:
                 return "Error code 401: please check the Ouath2Token"
             #if the sessions is OK
@@ -282,7 +290,12 @@ def GetTree(TreeUrl):
     """
     with requests.Session() as s:        
         s.headers.update(headers)
-        resp = s.get(TreeUrl)
+        try:
+            resp = s.get(TreeUrl)
+        except :
+            print("Github server is unreachable please check your internet connection")
+            resp = {}
+        
         return resp.json()
 
 def FilterCommits(CommitList, values=None):
@@ -320,6 +333,7 @@ def FilterCommits(CommitList, values=None):
 def WriteCommitsToFile(resultlist, file_path, in_q = None):
     """Writes a Commitlist to a file"""
     count = 1
+    file_path = str(file_path)
     with open(file_path+'/QueryResults.txt', 'w') as output_file:
         output_file.write(str(len(resultlist))+"\n")
         for item in resultlist:
